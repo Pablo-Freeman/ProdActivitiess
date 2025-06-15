@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ProdActivities</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    
+    /* Dark mode styles */
+    .dark .bg-custom { background-color: #2af2a0; }
+    .light .bg-custom { background-color: #2af2a0; }
+    
+    /* Text colors for dark and light modes */
+    .dark body {
+      background-color: #1a1a1a;
+      color: white;
+    }
+  
+    .light body {
+      background-color: #f8f9fa;
+      color: black;
+    }
+  
+    /* Phone container styling */
+    .phone-container {
+      max-width: 375px;
+      margin: 0 auto;
+      padding: 16px;
+      border-radius: 30px;
+      box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+  
+    body {
+      margin: 0;
+      min-height: 100vh;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+  
+    /* Calendar styling */
+    .calendar-container {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      margin: 16px 0;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    .dark .calendar-container {
+      background: #2a2a2a;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    }
+    
+    /* Date hover effect with image */
+    .date-cell {
+      position: relative;
+      min-height: 40px;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    
+    .date-cell:hover {
+      background-color: #f1f5f9 !important;
+      transform: scale(1.05);
+      z-index: 10;
+    }
+    
+    .dark .date-cell:hover {
+      background-color: #374151 !important;
+    }
+    
+    .date-cell.today {
+      background-color: #2af2a0 !important;
+      color: white !important;
+      font-weight: 600;
+    }
+    
+    .date-cell .date-image {
+      display: none;
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: 240px;
+      max-height: 180px;
+      width: auto;
+      height: auto;
+      border-radius: 8px;
+      border: 2px solid white;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+      object-fit: contain;
+      object-position: center;
+      margin-bottom: 12px;
+      z-index: 1000;
+      background: rgba(255,255,255,0.95);
+      padding: 6px;
+      image-orientation: from-image;
+    }
+    
+    .date-cell:hover .date-image {
+      display: block;
+      animation: fadeInScale 0.2s ease-out;
+    }
+
+    @keyframes fadeInScale {
+      from {
+        opacity: 0;
+        transform: translateX(-50%) scale(0.8);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(-50%) scale(1);
+      }
+    }
+
+    /* Activity cards styling */
+    .activity-card {
+      background: white;
+      border-radius: 20px;
+      padding: 16px;
+      margin: 8px 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      border: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.2s ease;
+    }
+    
+    .dark .activity-card {
+      background: #2a2a2a;
+      border-color: #404040;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    
+    .activity-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    }
+    
+    .dark .activity-card:hover {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+    
+    .activity-time {
+      background: #f3f4f6;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-weight: 600;
+      font-size: 14px;
+      min-width: 80px;
+      text-align: center;
+    }
+    
+    .dark .activity-time {
+      background: #374151;
+    }
+    
+    .activity-text {
+      flex: 1;
+      margin-left: 12px;
+      font-weight: 500;
+    }
+    
+    .activity-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .delete-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #fee2e2;
+      color: #dc2626;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      font-size: 16px;
+    }
+    
+    .delete-btn:hover {
+      background: #fecaca;
+      transform: scale(1.1);
+    }
+    
+    .dark .delete-btn {
+      background: #7f1d1d;
+      color: #fca5a5;
+    }
+    
+    .dark .delete-btn:hover {
+      background: #991b1b;
+    }
+
+    /* Loading spinner */
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: #2af2a0;
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .error-message {
+      color: #ef4444;
+      background-color: #fee2e2;
+      padding: 8px;
+      border-radius: 8px;
+      margin: 8px 0;
+    }
+
+    .dark .error-message {
+      background-color: #7f1d1d;
+      color: #fca5a5;
+    }
+    
+    /* Header improvements */
+    .header-container {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: #2af2a0;
+      margin-bottom: 16px;
+      margin-left: -16px;
+      margin-right: -16px;
+      margin-top: -16px;
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+    
+    /* Navigation buttons */
+    .nav-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: #1f2937;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .nav-btn:hover {
+      background: rgba(255,255,255,0.3);
+      transform: scale(1.05);
+    }
+    
+    /* Month/Year display */
+    .month-year {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1f2937;
+    }
+    
+    /* Calendar headers */
+    .calendar-header {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      margin-bottom: 8px;
+      padding: 0 4px;
+    }
+    
+    .calendar-header div {
+      text-align: center;
+      font-weight: 600;
+      padding: 8px 0;
+      color: #6b7280;
+      font-size: 14px;
+    }
+    
+    .dark .calendar-header div {
+      color: #9ca3af;
+    }
+    
+    /* Calendar grid */
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      padding: 0 4px;
+    }
+    
+    /* Task list container */
+    .task-list-container {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      margin-top: 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    .dark .task-list-container {
+      background: #2a2a2a;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    }
+    
+    /* Popup improvements */
+    .popup-content {
+      background: white;
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+      width: 90%;
+      max-width: 400px;
+    }
+    
+    .dark .popup-content {
+      background: #2a2a2a;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    }
+    
+    /* Form inputs */
+    .form-input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid #d1d5db;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      font-size: 16px;
+      transition: all 0.2s ease;
+    }
+    
+    .form-input:focus {
+      outline: none;
+      border-color: #2af2a0;
+      box-shadow: 0 0 0 3px rgba(42, 242, 160, 0.1);
+    }
+    
+    .dark .form-input {
+      background: #374151;
+      border-color: #4b5563;
+      color: white;
+    }
+    
+    /* Buttons */
+    .btn-primary {
+      background: #2af2a0;
+      color: #1f2937;
+      padding: 12px 24px;
+      border-radius: 12px;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    
+    .btn-primary:hover {
+      background: #1dd873;
+      transform: translateY(-1px);
+    }
+    
+    .btn-secondary {
+      background: #f3f4f6;
+      color: #374151;
+      padding: 12px 24px;
+      border-radius: 12px;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .btn-secondary:hover {
+      background: #e5e7eb;
+      transform: translateY(-1px);
+    }
+    
+    .dark .btn-secondary {
+      background: #374151;
+      color: #d1d5db;
+    }
+    
+    .dark .btn-secondary:hover {
+      background: #4b5563;
+    }
+
+    /* Header button styles */
+    .header-btn {
+      background: white;
+      color: black;
+      border-radius: 12px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    
+    .header-btn:hover {
+      background: #f3f4f6;
+      transform: translateY(-1px);
+    }
+    
+    .header-btn-round {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-black dark:text-white transition duration-300">
+  <div class="content max-w-md mx-auto p-4">
+    <!-- Header -->
+    <div class="header-container flex justify-between items-center bg-custom py-4">
+      <h1 class="text-2xl font-bold text-gray-900">ProdActivities</h1>
+      <div class="flex items-center space-x-2">
+        <button onclick="window.location.href='aset.html'" class="header-btn header-btn-round" title="Profile Settings">👤</button>
+        <button onclick="window.location.href='profile.html'" class="header-btn" title="View Profile">
+          <span class="mr-1">👨‍💼</span>
+          <span class="hidden sm:inline">Profile</span>
+        </button>
+        <button onclick="toggleMode()" class="header-btn header-btn-round" id="modeToggle" title="Toggle Theme">🌞</button>
+        <button onclick="window.location.href='log in.html'" class="header-btn" title="Logout">
+          <span class="mr-1">🚪</span>
+          <span class="hidden sm:inline">Logout</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Error Display -->
+    <div id="errorDisplay" class="hidden error-message"></div>
+
+    <!-- Profile View Modal -->
+    <div id="profileModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 hidden z-50">
+      <div class="popup-content">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="font-bold text-xl">Profile Overview</h3>
+          <button onclick="closeProfileView()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+        </div>
+        
+        <div class="space-y-4">
+          <div class="flex items-center space-x-4">
+            <div class="w-16 h-16 bg-gradient-to-br from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+              U
+            </div>
+            <div>
+              <h4 class="font-semibold text-lg">User Profile</h4>
+              <p class="text-gray-600 dark:text-gray-400">Productivity Enthusiast</p>
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-4 mt-6">
+            <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg text-center">
+              <div class="text-2xl font-bold text-green-500" id="totalActivities">0</div>
+              <div class="text-sm text-gray-600 dark:text-gray-400">Total Activities</div>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg text-center">
+              <div class="text-2xl font-bold text-blue-500" id="activeDays">0</div>
+              <div class="text-sm text-gray-600 dark:text-gray-400">Active Days</div>
+            </div>
+          </div>
+          
+          <div class="mt-6">
+            <h5 class="font-semibold mb-2">Recent Activity</h5>
+            <div id="recentActivities" class="space-y-2 max-h-32 overflow-y-auto">
+              <!-- Recent activities will be populated here -->
+            </div>
+          </div>
+        </div>
+        
+        <div class="flex justify-end mt-6">
+          <button onclick="closeProfileView()" class="btn-primary">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calendar -->
+    <div class="calendar-container">
+      <!-- Calendar Navigation -->
+      <div class="flex justify-between items-center mb-6">
+        <button onclick="prevMonth()" class="nav-btn">←</button>
+        <h2 class="month-year" id="monthYear">May 2025</h2>
+        <button onclick="nextMonth()" class="nav-btn">→</button>
+      </div>
+
+      <!-- Calendar Headers -->
+      <div class="calendar-header">
+        <div>S</div><div>M</div><div>T</div><div>W</div><div>Th</div><div>F</div><div>St</div>
+      </div>
+
+      <!-- Calendar Grid -->
+      <div id="calendarDays" class="calendar-grid">
+        <div class="col-span-7 text-center py-4">Loading calendar...</div>
+      </div>
+    </div>
+
+    <!-- Task List -->
+    <div id="taskListContainer" class="task-list-container hidden">
+      <h3 class="text-xl font-bold mb-4">Activities for <span id="taskDateLabel"></span></h3>
+      <div id="taskList" class="space-y-3"></div>
+    </div>
+
+    <!-- Popup -->
+    <div id="popup" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 hidden z-50">
+      <div class="popup-content">
+        <h3 class="font-bold mb-4 text-xl">Add Activity for <span id="selectedDate"></span></h3>
+        <input id="activityTime" type="time" class="form-input" placeholder="Select time" />
+        <input id="activityText" type="text" placeholder="Activity description" class="form-input" />
+        <input id="activityImage" type="file" accept="image/*" class="form-input" />
+        <div id="uploadStatus" class="text-sm mb-4 hidden"></div>
+        <div class="flex justify-end space-x-3">
+          <button onclick="closePopup()" class="btn-secondary">Cancel</button>
+          <button onclick="saveActivity()" class="btn-primary" id="saveButton">
+            <span id="saveText">Save</span>
+            <div id="saveSpinner" class="spinner ml-2 hidden"></div>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', async function() {
+    // Configuration
+    const SUPABASE_URL = 'https://utecoensjmonkiyzswil.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV0ZWNvZW5zam1vbmtpeXpzd2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg2OTg1NDgsImV4cCI6MjA2NDI3NDU0OH0.iv7HM9tdcLAXn9ZHGiPSrYQXsiIGim46LHZMHa1w0sU';
+    
+    // Initialize Supabase only if key is provided
+    let supabase = null;
+    let useCloudStorage = false;
+    
+    if (SUPABASE_KEY && SUPABASE_KEY !== 'YOUR_SUPABASE_ANON_KEY_HERE') {
+      try {
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        useCloudStorage = true;
+        console.log('Cloud storage enabled');
+      } catch (error) {
+        console.error('Failed to initialize Supabase:', error);
+        showError('Failed to connect to cloud storage. Using local storage only.');
+      }
+    } else {
+      console.log('Using local storage only');
+      showError('Cloud storage not configured. Using local storage only.');
+    }
+
+    // Global variables
+    let currentMonth = 4; // May
+    let currentYear = 2025;
+    const monthYear = document.getElementById('monthYear');
+    const calendarDays = document.getElementById('calendarDays');
+    const popup = document.getElementById('popup');
+    const selectedDateText = document.getElementById('selectedDate');
+    let selectedDate = '';
+    let activities = {};
+
+    // Load activities from localStorage
+    function loadActivities() {
+      try {
+        activities = JSON.parse(localStorage.getItem('activities') || '{}');
+      } catch (error) {
+        console.error('Error loading activities from localStorage:', error);
+        activities = {};
+      }
+    }
+
+    // Save activities to localStorage
+    function saveActivities() {
+      try {
+        localStorage.setItem('activities', JSON.stringify(activities));
+      } catch (error) {
+        console.error('Error saving activities to localStorage:', error);
+        showError('Failed to save activities locally');
+      }
+    }
+
+    // Show error message
+    function showError(message) {
+      const errorDisplay = document.getElementById('errorDisplay');
+      errorDisplay.textContent = message;
+      errorDisplay.classList.remove('hidden');
+      setTimeout(() => {
+        errorDisplay.classList.add('hidden');
+      }, 5000);
+    }
+
+    // Profile view functions
+    function openProfileView() {
+      updateProfileStats();
+      document.getElementById('profileModal').classList.remove('hidden');
+    }
+
+    function closeProfileView() {
+      document.getElementById('profileModal').classList.add('hidden');
+    }
+
+    function updateProfileStats() {
+      // Calculate total activities
+      let totalActivities = 0;
+      let activeDays = 0;
+      let recentActivities = [];
+
+      for (const [date, dayActivities] of Object.entries(activities)) {
+        if (dayActivities && dayActivities.length > 0) {
+          totalActivities += dayActivities.length;
+          activeDays++;
+          
+          // Add to recent activities (with date info)
+          dayActivities.forEach(activity => {
+            recentActivities.push({
+              ...activity,
+              date: date
+            });
+          });
+        }
+      }
+
+      // Sort recent activities by date and take the last 5
+      recentActivities.sort((a, b) => new Date(b.date) - new Date(a.date));
+      recentActivities = recentActivities.slice(0, 5);
+
+      // Update UI
+      document.getElementById('totalActivities').textContent = totalActivities;
+      document.getElementById('activeDays').textContent = activeDays;
+
+      // Update recent activities list
+      const recentActivitiesContainer = document.getElementById('recentActivities');
+      if (recentActivities.length > 0) {
+        recentActivitiesContainer.innerHTML = recentActivities.map(activity => `
+          <div class="flex justify-between items-center text-sm p-2 bg-gray-50 dark:bg-gray-700 rounded">
+            <span class="truncate flex-1">${activity.text}</span>
+            <span class="text-gray-500 ml-2">${new Date(activity.date).toLocaleDateString()}</span>
+          </div>
+        `).join('');
+      } else {
+        recentActivitiesContainer.innerHTML = '<p class="text-gray-500 text-sm text-center py-2">No activities yet</p>';
+      }
+    }
+
+    // Render calendar
+    async function renderCalendar() {
+      try {
+        console.log('Rendering calendar for:', currentMonth, currentYear);
+        
+        monthYear.textContent = `${new Date(currentYear, currentMonth).toLocaleString('default', { month: 'long' })} ${currentYear}`;
+
+        const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+        const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+        const today = new Date();
+        const isCurrentMonth = today.getFullYear() === currentYear && today.getMonth() === currentMonth;
+
+        let html = '';
+
+        // Add empty cells for days before the first day of the month
+        for (let i = 0; i < firstDay; i++) {
+          html += `<div></div>`;
+        }
+
+        // Generate calendar days
+        for (let day = 1; day <= daysInMonth; day++) {
+          const dateKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const dateActivities = activities[dateKey] || [];
+          const hasActivities = dateActivities.length > 0;
+          const isToday = isCurrentMonth && today.getDate() === day;
+          
+          html += `
+            <div class="date-cell ${isToday ? 'today' : ''} ${hasActivities ? 'font-bold' : ''}"
+                 onclick="openPopup('${dateKey}')">
+              ${day}
+              ${hasActivities ? '<div class="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full"></div>' : ''}
+            </div>`;
+        }
+
+        calendarDays.innerHTML = html;
+        
+        // Load images asynchronously after calendar is rendered
+        if (useCloudStorage) {
+          loadCalendarImages();
+        }
+
+      } catch (error) {
+        console.error("Error rendering calendar:", error);
+        calendarDays.innerHTML = `<div class="col-span-7 text-red-500 p-4">Error loading calendar: ${error.message}</div>`;
+        showError('Failed to render calendar');
+      }
+    }
+
+    // Load images for calendar (async operation)
+    async function loadCalendarImages() {
+      try {
+        const dateCells = document.querySelectorAll('.date-cell');
+        
+        for (const cell of dateCells) {
+          const dateKey = cell.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
+          if (!dateKey) continue;
+          
+          const dateActivities = activities[dateKey] || [];
+          const activityWithImage = dateActivities.find(activity => activity.image);
+          
+          if (activityWithImage) {
+            const imageUrl = await getImageUrl(activityWithImage.image);
+            if (imageUrl) {
+              cell.innerHTML += `<img src="${imageUrl}" class="date-image" alt="Activity image" 
+                loading="lazy" 
+                onload="console.log('Image loaded:', this.naturalWidth, 'x', this.naturalHeight)" 
+                onerror="console.error('Image failed to load:', this.src); this.style.display='none'">`;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading calendar images:', error);
+      }
+    }
+
+    // Get image URL from Supabase or return local URL
+    async function getImageUrl(imagePath) {
+      if (!imagePath || !useCloudStorage) return '';
+
+      // If it's already a URL, return it
+      if (imagePath.startsWith('http')) {
+        return imagePath;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .storage
+          .from('activity-images')
+          .createSignedUrl(imagePath, 3600);
+
+        if (error) throw error;
+        return data?.signedUrl || '';
+      } catch (error) {
+        console.error("Error getting image URL:", error);
+        return '';
+      }
+    }
+
+    // Navigation functions
+    function prevMonth() {
+      currentMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+      currentYear = currentMonth === 11 ? currentYear - 1 : currentYear;
+      renderCalendar();
+    }
+
+    function nextMonth() {
+      currentMonth = currentMonth === 11 ? 0 : currentMonth + 1;
+      currentYear = currentMonth === 0 ? currentYear + 1 : currentYear;
+      renderCalendar();
+    }
+
+    // Popup functions
+    function openPopup(dateKey) {
+      selectedDate = dateKey;
+      selectedDateText.textContent = dateKey;
+      document.getElementById('activityTime').value = '';
+      document.getElementById('activityText').value = '';
+      document.getElementById('activityImage').value = '';
+      document.getElementById('uploadStatus').classList.add('hidden');
+      popup.classList.remove('hidden');
+      renderTasks();
+    }
+
+    function closePopup() {
+      popup.classList.add('hidden');
+      document.getElementById('taskListContainer').classList.add('hidden');
+    }
+
+    // Save activity
+    async function saveActivity() {
+      const time = document.getElementById('activityTime').value;
+      const text = document.getElementById('activityText').value;
+      const imageFile = document.getElementById('activityImage').files[0];
+
+      if (!text) {
+        alert('Please enter an activity description');
+        return;
+      }
+
+      const saveButton = document.getElementById('saveButton');
+      const saveText = document.getElementById('saveText');
+      const saveSpinner = document.getElementById('saveSpinner');
+      const uploadStatus = document.getElementById('uploadStatus');
+
+      // Show loading state
+      saveText.textContent = 'Saving...';
+      saveSpinner.classList.remove('hidden');
+      saveButton.disabled = true;
+
+      if (!activities[selectedDate]) {
+        activities[selectedDate] = [];
+      }
+
+      const newActivity = { time, text };
+
+      try {
+        if (imageFile && useCloudStorage) {
+          uploadStatus.textContent = 'Uploading image...';
+          uploadStatus.classList.remove('hidden');
+
+          // Generate unique filename
+          const fileExt = imageFile.name.split('.').pop();
+          const fileName = `${selectedDate}-${Date.now()}.${fileExt}`;
+
+          // Upload to Supabase storage
+          const { data, error } = await supabase
+            .storage
+            .from('activity-images')
+            .upload(fileName, imageFile);
+
+          if (error) throw error;
+
+          newActivity.image = fileName;
+          uploadStatus.textContent = 'Image uploaded successfully!';
+          uploadStatus.classList.remove('text-red-500');
+          uploadStatus.classList.add('text-green-500');
+        } else if (imageFile && !useCloudStorage) {
+          // For local storage, create a data URL
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            newActivity.image = e.target.result;
+            activities[selectedDate].push(newActivity);
+            saveActivities();
+            closePopup();
+            renderCalendar();
+          };
+          reader.readAsDataURL(imageFile);
+          return;
+        }
+
+        activities[selectedDate].push(newActivity);
+        saveActivities();
+        closePopup();
+        await renderCalendar();
+      } catch (error) {
+        console.error('Error saving activity:', error);
+        uploadStatus.textContent = 'Error: ' + error.message;
+        uploadStatus.classList.remove('text-green-500');
+        uploadStatus.classList.add('text-red-500');
+        uploadStatus.classList.remove('hidden');
+        showError('Failed to save activity');
+      } finally {
+        // Reset button state
+        saveText.textContent = 'Save';
+        saveSpinner.classList.add('hidden');
+        saveButton.disabled = false;
+      }
+    }
+
+    // Render tasks
+    async function renderTasks() {
+      const taskList = document.getElementById('taskList');
+      const taskDateLabel = document.getElementById('taskDateLabel');
+      const taskListContainer = document.getElementById('taskListContainer');
+      
+      taskList.innerHTML = '';
+      taskDateLabel.textContent = selectedDate || 'No date selected';
+
+      if (selectedDate && activities[selectedDate] && activities[selectedDate].length > 0) {
+        taskListContainer.classList.remove('hidden');
+        
+        for (const [index, task] of activities[selectedDate].entries()) {
+          let imageHtml = '';
+          if (task.image) {
+            if (useCloudStorage && !task.image.startsWith('data:')) {
+              const imageUrl = await getImageUrl(task.image);
+              if (imageUrl) {
+                imageHtml = `<img src="${imageUrl}" class="w-8 h-8 rounded-full object-cover ml-2" onerror="this.style.display='none'">`;
+              }
+            } else if (task.image.startsWith('data:')) {
+              imageHtml = `<img src="${task.image}" class="w-8 h-8 rounded-full object-cover ml-2">`;
+            }
+          }
+
+          taskList.innerHTML += `
+            <div class="activity-card">
+              <div class="flex items-center flex-1">
+                <div class="activity-time">${task.time || 'All day'}</div>
+                <div class="activity-text">${task.text}</div>
+                ${imageHtml}
+              </div>
+              <div class="activity-actions">
+                <button class="delete-btn" onclick="deleteTask(${index})" title="Delete activity">🗑️</button>
+              </div>
+            </div>`;
+        }
+      } else {
+        taskListContainer.classList.remove('hidden');
+        taskList.innerHTML = `<p class="text-gray-500 text-center py-8">No activities scheduled for this date.</p>`;
+      }
+    }
+
+    // Delete task
+    async function deleteTask(index) {
+      if (confirm('Are you sure you want to delete this activity?')) {
+        try {
+          const activity = activities[selectedDate][index];
+
+          // Delete image from storage if it exists and using cloud storage
+          if (activity.image && useCloudStorage && !activity.image.startsWith('data:')) {
+            try {
+              const { error } = await supabase
+                .storage
+                .from('activity-images')
+                .remove([activity.image]);
+
+              if (error) console.error('Error deleting image:', error);
+            } catch (error) {
+              console.error('Error deleting image:', error);
+            }
+          }
+
+          // Remove activity
+          activities[selectedDate].splice(index, 1);
+          if (activities[selectedDate].length === 0) {
+            delete activities[selectedDate];
+          }
+          
+          saveActivities();
+          renderTasks();
+          renderCalendar();
+        } catch (error) {
+          console.error('Error deleting task:', error);
+          showError('Failed to delete activity');
+        }
+      }
+    }
+
+    // Toggle dark/light mode
+    function toggleMode() {
+      const html = document.documentElement;
+      const modeToggle = document.getElementById('modeToggle');
+      html.classList.toggle('dark');
+      html.classList.toggle('light');
+      modeToggle.textContent = html.classList.contains('dark') ? '🌙' : '🌞';
+    }
+
+    // Initialize app
+    try {
+      loadActivities();
+      await renderCalendar();
+    } catch (error) {
+      console.error('Error initializing app:', error);
+      showError('Failed to initialize application');
+    }
+
+    // Expose functions to global scope for HTML onclick handlers
+    window.openPopup = openPopup;
+    window.prevMonth = prevMonth;
+    window.nextMonth = nextMonth;
+    window.saveActivity = saveActivity;
+    window.closePopup = closePopup;
+    window.deleteTask = deleteTask;
+    window.toggleMode = toggleMode;
+  });
+  </script>
+</body>
+</html>
