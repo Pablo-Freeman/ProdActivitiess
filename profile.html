@@ -1,734 +1,295 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProdActivities - Profile</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+ <script>
+ 
+  const SUPABASE_URL = 'https://utecoensjmonkiyzswil.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV0ZWNvZW5zam1vbmtpeXpzd2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg2OTg1NDgsImV4cCI6MjA2NDI3NDU0OH0.iv7HM9tdcLAXn9ZHGiPSrYQXsiIGim46LHZMHa1w0sU';
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // --- Activity Tracker Class ---
+  class ActivityTracker {
+    constructor() {
+      this.initializeTracking();
+    }
+
+    initializeTracking() {
+      const defaultActivity = {
+        tasksCompleted: 0,
+        totalSessions: 0,
+        loginStreak: 0,
+        lastLoginDate: null,
+        activeDays: [],
+        sessionStartTime: null,
+        dailyTasks: {},
+        loginHistory: []
+      };
+
+      let userActivity = JSON.parse(localStorage.getItem('userActivity') || 'null');
+      if (!userActivity) {
+        userActivity = defaultActivity;
+        localStorage.setItem('userActivity', JSON.stringify(userActivity));
+      }
+
+      this.trackSession();
+    }
+
+    trackSession() {
+      const userActivity = this.getUserActivity();
+      const today = new Date().toDateString();
+      userActivity.totalSessions++;
+      userActivity.sessionStartTime = new Date().toISOString();
+      this.updateLoginStreak(userActivity, today);
+
+      if (!userActivity.activeDays.includes(today)) userActivity.activeDays.push(today);
+      if (!userActivity.loginHistory.includes(today)) userActivity.loginHistory.push(today);
+
+      this.saveUserActivity(userActivity);
+    }
+
+    updateLoginStreak(userActivity, today) {
+      const todayDate = new Date(today);
+      const lastLogin = userActivity.lastLoginDate ? new Date(userActivity.lastLoginDate) : null;
+
+      if (!lastLogin) userActivity.loginStreak = 1;
+      else {
+        const daysDiff = Math.floor((todayDate - lastLogin) / (1000 * 60 * 60 * 24));
+        if (daysDiff === 1) userActivity.loginStreak++;
+        else if (daysDiff !== 0) userActivity.loginStreak = 1;
+      }
+
+      userActivity.lastLoginDate = today;
+    }
+
+    completeTask() {
+      const userActivity = this.getUserActivity();
+      const today = new Date().toDateString();
+
+      userActivity.tasksCompleted++;
+      if (!userActivity.dailyTasks[today]) userActivity.dailyTasks[today] = 0;
+      userActivity.dailyTasks[today]++;
+
+      if (!userActivity.activeDays.includes(today)) userActivity.activeDays.push(today);
+
+      this.saveUserActivity(userActivity);
+      this.updateStatsDisplay();
+    }
+
+    getUserActivity() {
+      return JSON.parse(localStorage.getItem('userActivity') || '{}');
+    }
+
+    saveUserActivity(activity) {
+      localStorage.setItem('userActivity', JSON.stringify(activity));
+    }
+
+    getStats() {
+      const userActivity = this.getUserActivity();
+      return {
+        tasksCompleted: userActivity.tasksCompleted || 0,
+        daysActive: userActivity.activeDays ? userActivity.activeDays.length : 0,
+        loginStreak: userActivity.loginStreak || 0,
+        totalSessions: userActivity.totalSessions || 0
+      };
+    }
+
+    updateStatsDisplay() {
+      const stats = this.getStats();
+      document.getElementById('tasksCompleted').textContent = stats.tasksCompleted;
+      document.getElementById('daysActive').textContent = stats.daysActive;
+      document.getElementById('loginStreak').textContent = stats.loginStreak;
+      document.getElementById('totalSessions').textContent = stats.totalSessions;
+    }
+
+    resetStats() {
+      localStorage.removeItem('userActivity');
+      this.initializeTracking();
+      this.updateStatsDisplay();
+    }
+  }
+
+  // --- Initialize Tracker ---
+  const activityTracker = new ActivityTracker();
+
+  // --- Theme ---
+  function toggleTheme() {
+    const body = document.body;
+    const themeToggle = document.querySelector('.theme-toggle');
+    body.classList.toggle('light');
+    body.classList.toggle('dark');
+    themeToggle.textContent = body.classList.contains('dark') ? '☀️' : '🌙';
+    localStorage.setItem('theme', body.classList.contains('dark') ? 'dark' : 'light');
+  }
+
+  window.addEventListener('load', async function () {
+  const savedTheme = localStorage.getItem('theme') || 'light';
+  const body = document.body;
+  const themeToggle = document.querySelector('.theme-toggle');
+  body.classList.remove('light', 'dark');
+  body.classList.add(savedTheme);
+  themeToggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+
+  // Force reload if ?refresh=1 is present
+  if (window.location.search.includes('refresh=1')) {
+    await loadUserProfile();
+    // Optionally, remove the query param so it doesn't reload every time
+    window.history.replaceState({}, document.title, window.location.pathname);
+  } else {
+    await loadUserProfile();
+  }
+});
+
+  function goBack() {
+    window.history.back();
+  }
+
+  function editProfile() {
+    window.location.href = 'aset.html';
+  }
+
+  // --- Load Profile from Supabase Auth ---
+  async function loadUserProfile() {
+    try {
+      const {
+          data: { session },
+          error: sessionError
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session) {
+          console.error("No session found:", sessionError);
+          return;
+      }
+
+      const userId = session.user.id;
+
+      // Fetch profile data from Supabase table (e.g., "profiles")
+      const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+
+      if (error) {
+          console.error("Failed to load profile", error);
+          return;
+      }
+
+      // Display data
+      document.getElementById('usernameDisplay').textContent = profile.username || 'No username';
+      document.getElementById('userEmailDisplay').textContent = session.user.email;
+
+      const createdDate = new Date(session.user.created_at);
+      document.getElementById('accountCreatedDate').textContent = createdDate.toDateString();
+      document.getElementById('memberSinceDate').textContent = calculateDaysSince(createdDate);
+
+      // Optional: profile picture
+      if (profile.profile_picture_url) {
+          document.getElementById('profilePictureDisplay').innerHTML = 
+              `<img src="${profile.profile_picture_url}" alt="Profile Picture">`;
+      }
+
+      loadUserStats();
+    } catch (error) {
+      console.error('Supabase error:', error);
+      loadUserProfileFromLocal();
+    }
+  }
+  
+
+  // --- Fallback Profile Load ---
+  function loadUserProfileFromLocal() {
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    let currentUser = JSON.parse(localStorage.getItem('userSession') || 'null') || users.at(-1);
+
+    if (!currentUser) {
+      currentUser = {
+        username: 'Guest User',
+        email: 'guest@prodactivities.com',
+        accountCreated: new Date().toISOString()
+      };
+    }
+
+    document.getElementById('usernameDisplay').textContent = currentUser.username;
+    document.getElementById('userEmailDisplay').textContent = currentUser.email;
+
+    const createdDate = new Date(currentUser.accountCreated);
+    document.getElementById('accountCreatedDate').textContent = createdDate.toLocaleDateString();
+    document.getElementById('memberSinceDate').textContent = calculateDaysSince(createdDate);
+
+    const savedProfilePic = localStorage.getItem('profilePicture');
+    if (savedProfilePic) {
+      document.getElementById('profilePictureDisplay').innerHTML = `<img src="${savedProfilePic}" alt="Profile Picture">`;
+    }
+
+    loadUserStats();
+  }
+
+  function calculateDaysSince(createdDate) {
+    const now = new Date();
+    const diffTime = Math.abs(now - createdDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    if (diffDays === 1) return '1 day';
+    if (diffDays < 30) return `${diffDays} days`;
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months`;
+    return `${Math.floor(diffDays / 365)} years`;
+  }
+
+  function loadUserStats() {
+    const stats = activityTracker.getStats();
+    document.getElementById('tasksCompleted').textContent = stats.tasksCompleted;
+    document.getElementById('daysActive').textContent = stats.daysActive;
+    document.getElementById('loginStreak').textContent = stats.loginStreak;
+    document.getElementById('totalSessions').textContent = stats.totalSessions;
+    animateStats();
+  }
+
+  function animateStats() {
+    const statElements = document.querySelectorAll('.stat-number');
+    statElements.forEach(element => {
+      const finalValue = parseInt(element.textContent);
+      let currentValue = 0;
+      const increment = Math.max(1, Math.ceil(finalValue / 30));
+      element.textContent = '0';
+      const timer = setInterval(() => {
+        currentValue += increment;
+        if (currentValue >= finalValue) {
+          element.textContent = finalValue;
+          clearInterval(timer);
+        } else {
+          element.textContent = currentValue;
         }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            transition: all 0.3s ease;
-            min-height: 100vh;
-            max-width: 400px;
-            margin: 0 auto;
-            position: relative;
-        }
-
-        /* Light mode styles */
-        body.light {
-            background: #ffffff;
-            color: #000;
-        }
-
-        /* Dark mode styles */
-        body.dark {
-            background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
-            color: #fff;
-        }
-
-        .header {
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
-            position: relative;
-        }
-
-        .light .header {
-            background: linear-gradient(135deg, #00f5a0, #00d4aa);
-        }
-
-        .dark .header {
-            background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
-        }
-
-        .header-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .back-arrow {
-            font-size: 24px;
-            cursor: pointer;
-            transition: transform 0.2s ease;
-        }
-
-        .back-arrow:hover {
-            transform: translateX(-3px);
-        }
-
-        .logo {
-            font-size: 24px;
-            font-weight: bold;
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        .theme-toggle {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            border: none;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            transition: all 0.3s ease;
-        }
-
-        .light .theme-toggle {
-            background: rgba(0, 0, 0, 0.1);
-            color: #000;
-        }
-
-        .dark .theme-toggle {
-            background: rgba(255, 255, 255, 0.1);
-            color: #fff;
-        }
-
-        .theme-toggle:hover {
-            transform: rotate(180deg);
-        }
-
-        .profile-container {
-            padding: 0 20px 20px;
-        }
-
-        .profile-card {
-            border-radius: 20px;
-            padding: 30px 20px;
-            margin-bottom: 30px;
-            text-align: center;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-        }
-
-        .light .profile-card {
-            background: rgba(255, 255, 255, 0.9);
-            border: 1px solid rgba(0, 245, 160, 0.2);
-        }
-
-        .dark .profile-card {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .profile-picture-display {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            margin: 0 auto 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 48px;
-            transition: all 0.3s ease;
-            border: 4px solid #00f5a0;
-            overflow: hidden;
-        }
-
-        .profile-picture-display img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .light .profile-picture-display {
-            background: rgba(0, 245, 160, 0.1);
-            color: #666;
-        }
-
-        .dark .profile-picture-display {
-            background: rgba(255, 255, 255, 0.1);
-            color: #999;
-        }
-
-        .profile-picture-display:hover {
-            transform: scale(1.05);
-            box-shadow: 0 8px 25px rgba(0, 245, 160, 0.3);
-        }
-
-        .username-display {
-            font-size: 28px;
-            font-weight: bold;
-            margin-bottom: 10px;
-            background: linear-gradient(45deg, #00f5a0, #00d4aa);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .user-email {
-            font-size: 16px;
-            opacity: 0.7;
-            margin-bottom: 20px;
-        }
-
-        .info-section {
-            margin-bottom: 25px;
-        }
-
-        .info-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .info-card {
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 15px;
-            transition: all 0.3s ease;
-        }
-
-        .light .info-card {
-            background: rgba(0, 245, 160, 0.05);
-            border: 1px solid rgba(0, 245, 160, 0.2);
-        }
-
-        .dark .info-card {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .info-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(0, 245, 160, 0.2);
-        }
-
-        .info-label {
-            font-size: 14px;
-            opacity: 0.7;
-            margin-bottom: 5px;
-        }
-
-        .info-value {
-            font-size: 16px;
-            font-weight: 600;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-top: 20px;
-        }
-
-        .stat-card {
-            border-radius: 15px;
-            padding: 20px;
-            text-align: center;
-            transition: all 0.3s ease;
-        }
-
-        .light .stat-card {
-            background: rgba(0, 245, 160, 0.1);
-        }
-
-        .dark .stat-card {
-            background: rgba(255, 255, 255, 0.1);
-        }
-
-        .stat-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 6px 20px rgba(0, 245, 160, 0.3);
-        }
-
-        .stat-number {
-            font-size: 24px;
-            font-weight: bold;
-            color: #00f5a0;
-            margin-bottom: 5px;
-        }
-
-        .stat-label {
-            font-size: 12px;
-            opacity: 0.7;
-        }
-
-        .edit-profile-btn {
-            width: 200px;
-            padding: 15px;
-            border: none;
-            border-radius: 25px;
-            background: #00f5a0;
-            color: #000;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin: 20px auto 0;
-            display: block;
-        }
-
-        .edit-profile-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 245, 160, 0.4);
-        }
-
-        .edit-profile-btn:active {
-            transform: translateY(0);
-        }
-
-        /* Demo controls for testing */
-        .demo-controls {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 245, 160, 0.9);
-            padding: 10px;
-            border-radius: 10px;
-            display: flex;
-            gap: 10px;
-            font-size: 12px;
-        }
-
-        .demo-btn {
-            padding: 5px 10px;
-            border: none;
-            border-radius: 5px;
-            background: #fff;
-            color: #000;
-            cursor: pointer;
-            font-size: 10px;
-        }
-
-        /* Responsive design */
-        @media (max-width: 480px) {
-            .profile-container {
-                padding: 0 15px 15px;
-            }
-            
-            .header {
-                padding: 15px;
-            }
-
-            .profile-picture-display {
-                width: 100px;
-                height: 100px;
-                font-size: 40px;
-            }
-
-            .username-display {
-                font-size: 24px;
-            }
-
-            .demo-controls {
-                bottom: 10px;
-                padding: 8px;
-            }
-        }
-    </style>
-</head>
-<body class="light">
-    <div class="header">
-        <div class="header-top">
-            <div class="back-arrow" onclick="goBack()">←</div>
-            <div class="logo">ProdActivities</div>
-            <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
-        </div>
-    </div>
-
-    <div class="profile-container">
-        <div class="profile-card">
-            <div class="profile-picture-display" id="profilePictureDisplay">
-                👤
-            </div>
-            <div class="username-display" id="usernameDisplay">Username</div>
-            <div class="user-email" id="userEmailDisplay">user@example.com</div>
-        </div>
-
-        <div class="info-section">
-            <h3 class="info-title">📅 Account Information</h3>
-            <div class="info-card">
-                <div class="info-label">Account Created</div>
-                <div class="info-value" id="accountCreatedDate">Loading...</div>
-            </div>
-            <div class="info-card">
-                <div class="info-label">Member Since</div>
-                <div class="info-value" id="memberSinceDate">Loading...</div>
-            </div>
-        </div>
-
-        <div class="info-section">
-            <h3 class="info-title">📊 Activity Stats</h3>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-number" id="tasksCompleted">0</div>
-                    <div class="stat-label">Tasks Completed</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="daysActive">0</div>
-                    <div class="stat-label">Days Active</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="loginStreak">0</div>
-                    <div class="stat-label">Current Streak</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="totalSessions">0</div>
-                    <div class="stat-label">Total Sessions</div>
-                </div>
-            </div>
-        </div>
-
-        <button class="edit-profile-btn" onclick="editProfile()">Edit Profile</button>
-    </div>
-
-    <!-- Demo controls for testing -->
-    <div class="demo-controls">
-        <button class="demo-btn" onclick="simulateTaskCompletion()">+Task</button>
-        <button class="demo-btn" onclick="simulateLogin()">Login</button>
-        <button class="demo-btn" onclick="resetStats()">Reset</button>
-    </div>
-
-    <script>
-        // Activity tracking system
-        class ActivityTracker {
-            constructor() {
-                this.initializeTracking();
-            }
-
-            initializeTracking() {
-                // Initialize user activity data structure
-                const defaultActivity = {
-                    tasksCompleted: 0,
-                    totalSessions: 0,
-                    loginStreak: 0,
-                    lastLoginDate: null,
-                    activeDays: [], // Array of dates when user was active
-                    sessionStartTime: null,
-                    dailyTasks: {}, // Track tasks per day
-                    loginHistory: [] // Track login dates
-                };
-
-                // Get existing activity or create new
-                let userActivity = JSON.parse(localStorage.getItem('userActivity') || 'null');
-                if (!userActivity) {
-                    userActivity = defaultActivity;
-                    localStorage.setItem('userActivity', JSON.stringify(userActivity));
-                }
-
-                // Track current session
-                this.trackSession();
-            }
-
-            trackSession() {
-                const userActivity = this.getUserActivity();
-                const today = new Date().toDateString();
-                
-                // Increment total sessions
-                userActivity.totalSessions++;
-                
-                // Track session start time
-                userActivity.sessionStartTime = new Date().toISOString();
-                
-                // Update login streak
-                this.updateLoginStreak(userActivity, today);
-                
-                // Add today to active days if not already present
-                if (!userActivity.activeDays.includes(today)) {
-                    userActivity.activeDays.push(today);
-                }
-
-                // Add to login history
-                if (!userActivity.loginHistory.includes(today)) {
-                    userActivity.loginHistory.push(today);
-                }
-
-                this.saveUserActivity(userActivity);
-            }
-
-            updateLoginStreak(userActivity, today) {
-                const todayDate = new Date(today);
-                const lastLogin = userActivity.lastLoginDate ? new Date(userActivity.lastLoginDate) : null;
-                
-                if (!lastLogin) {
-                    // First login
-                    userActivity.loginStreak = 1;
-                } else {
-                    const daysDiff = Math.floor((todayDate - lastLogin) / (1000 * 60 * 60 * 24));
-                    
-                    if (daysDiff === 1) {
-                        // Consecutive day
-                        userActivity.loginStreak++;
-                    } else if (daysDiff === 0) {
-                        // Same day - no change to streak
-                        return;
-                    } else {
-                        // Streak broken
-                        userActivity.loginStreak = 1;
-                    }
-                }
-                
-                userActivity.lastLoginDate = today;
-            }
-
-            completeTask() {
-                const userActivity = this.getUserActivity();
-                const today = new Date().toDateString();
-                
-                // Increment total tasks
-                userActivity.tasksCompleted++;
-                
-                // Track daily tasks
-                if (!userActivity.dailyTasks[today]) {
-                    userActivity.dailyTasks[today] = 0;
-                }
-                userActivity.dailyTasks[today]++;
-                
-                // Add today to active days if not already present
-                if (!userActivity.activeDays.includes(today)) {
-                    userActivity.activeDays.push(today);
-                }
-                
-                this.saveUserActivity(userActivity);
-                this.updateStatsDisplay();
-            }
-
-            getUserActivity() {
-                return JSON.parse(localStorage.getItem('userActivity') || '{}');
-            }
-
-            saveUserActivity(activity) {
-                localStorage.setItem('userActivity', JSON.stringify(activity));
-            }
-
-            getStats() {
-                const userActivity = this.getUserActivity();
-                return {
-                    tasksCompleted: userActivity.tasksCompleted || 0,
-                    daysActive: userActivity.activeDays ? userActivity.activeDays.length : 0,
-                    loginStreak: userActivity.loginStreak || 0,
-                    totalSessions: userActivity.totalSessions || 0
-                };
-            }
-
-            updateStatsDisplay() {
-                const stats = this.getStats();
-                
-                document.getElementById('tasksCompleted').textContent = stats.tasksCompleted;
-                document.getElementById('daysActive').textContent = stats.daysActive;
-                document.getElementById('loginStreak').textContent = stats.loginStreak;
-                document.getElementById('totalSessions').textContent = stats.totalSessions;
-            }
-
-            resetStats() {
-                localStorage.removeItem('userActivity');
-                this.initializeTracking();
-                this.updateStatsDisplay();
-            }
-        }
-
-        // Initialize activity tracker
-        const activityTracker = new ActivityTracker();
-
-        // Theme toggle functionality
-        function toggleTheme() {
-            const body = document.body;
-            const themeToggle = document.querySelector('.theme-toggle');
-            
-            if (body.classList.contains('light')) {
-                body.classList.remove('light');
-                body.classList.add('dark');
-                themeToggle.textContent = '☀️';
-                localStorage.setItem('theme', 'dark');
-            } else {
-                body.classList.remove('dark');
-                body.classList.add('light');
-                themeToggle.textContent = '🌙';
-                localStorage.setItem('theme', 'light');
-            }
-        }
-
-        // Load saved theme on page load
-        window.addEventListener('load', function() {
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            const body = document.body;
-            const themeToggle = document.querySelector('.theme-toggle');
-            
-            body.classList.remove('light', 'dark');
-            body.classList.add(savedTheme);
-            themeToggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
-            
-            // Load user profile data
-            loadUserProfile();
-        });
-
-        // Back button functionality
-        function goBack() {
-            window.history.back();
-        }
-
-        // Edit profile functionality
-        function editProfile() {
-            window.location.href = 'aset.html';
-        }
-
-        // Load user profile data
-        function loadUserProfile() {
-            // Get user data from localStorage
-            const users = JSON.parse(localStorage.getItem('users') || '[]');
-            
-            let currentUser = null;
-            const userSession = localStorage.getItem('userSession');
-            if (userSession) {
-                currentUser = JSON.parse(userSession);
-            } else if (users.length > 0) {
-                currentUser = users[users.length - 1];
-            }
-            
-            if (!currentUser) {
-                currentUser = {
-                    username: 'Guest User',
-                    email: 'guest@prodactivities.com',
-                    accountCreated: new Date().toISOString()
-                };
-            }
-            
-            if (!currentUser.accountCreated) {
-                currentUser.accountCreated = new Date().toISOString();
-                const userIndex = users.findIndex(u => u.email === currentUser.email);
-                if (userIndex !== -1) {
-                    users[userIndex] = currentUser;
-                    localStorage.setItem('users', JSON.stringify(users));
-                }
-            }
-
-            // Update display elements
-            document.getElementById('usernameDisplay').textContent = currentUser.username;
-            document.getElementById('userEmailDisplay').textContent = currentUser.email;
-            
-            // Format dates
-            const createdDate = new Date(currentUser.accountCreated);
-            const formattedDate = createdDate.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            });
-            
-            const memberSince = calculateDaysSince(createdDate);
-            
-            document.getElementById('accountCreatedDate').textContent = formattedDate;
-            document.getElementById('memberSinceDate').textContent = memberSince;
-            
-            // Load profile picture if exists
-            const savedProfilePic = localStorage.getItem('profilePicture');
-            if (savedProfilePic) {
-                document.getElementById('profilePictureDisplay').innerHTML = 
-                    `<img src="${savedProfilePic}" alt="Profile Picture">`;
-            }
-            
-            localStorage.setItem('currentUser', JSON.stringify(currentUser));
-            
-            // Load accurate stats
-            loadUserStats();
-        }
-
-        // Calculate days since account creation
-        function calculateDaysSince(createdDate) {
-            const now = new Date();
-            const diffTime = Math.abs(now - createdDate);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            if (diffDays === 1) {
-                return '1 day';
-            } else if (diffDays < 30) {
-                return `${diffDays} days`;
-            } else if (diffDays < 365) {
-                const months = Math.floor(diffDays / 30);
-                return months === 1 ? '1 month' : `${months} months`;
-            } else {
-                const years = Math.floor(diffDays / 365);
-                return years === 1 ? '1 year' : `${years} years`;
-            }
-        }
-
-        // Load user statistics (now accurate)
-        function loadUserStats() {
-            const stats = activityTracker.getStats();
-            
-            // Update display with real stats
-            document.getElementById('tasksCompleted').textContent = stats.tasksCompleted;
-            document.getElementById('daysActive').textContent = stats.daysActive;
-            document.getElementById('loginStreak').textContent = stats.loginStreak;
-            document.getElementById('totalSessions').textContent = stats.totalSessions;
-            
-            // Animate numbers
-            animateStats();
-        }
-
-        // Animate statistics numbers
-        function animateStats() {
-            const statElements = document.querySelectorAll('.stat-number');
-            
-            statElements.forEach(element => {
-                const finalValue = parseInt(element.textContent);
-                let currentValue = 0;
-                const increment = Math.max(1, Math.ceil(finalValue / 30));
-                
-                element.textContent = '0';
-                
-                const timer = setInterval(() => {
-                    currentValue += increment;
-                    if (currentValue >= finalValue) {
-                        element.textContent = finalValue;
-                        clearInterval(timer);
-                    } else {
-                        element.textContent = currentValue;
-                    }
-                }, 50);
-            });
-        }
-
-        // Demo functions for testing
-        function simulateTaskCompletion() {
-            activityTracker.completeTask();
-            console.log('Task completed! Stats updated.');
-        }
-
-        function simulateLogin() {
-            activityTracker.trackSession();
-            activityTracker.updateStatsDisplay();
-            console.log('New session tracked! Stats updated.');
-        }
-
-        function resetStats() {
-            if (confirm('Are you sure you want to reset all activity stats?')) {
-                activityTracker.resetStats();
-                console.log('Stats reset!');
-            }
-        }
-
-        // Export functions for other pages to use
-        window.ProdActivitiesTracker = {
-            completeTask: () => activityTracker.completeTask(),
-            trackSession: () => activityTracker.trackSession(),
-            getStats: () => activityTracker.getStats()
-        };
-
-        // Listen for storage changes
-        window.addEventListener('storage', function(e) {
-            if (e.key === 'profilePicture' || e.key === 'currentUser' || e.key === 'userActivity') {
-                loadUserProfile();
-            }
-        });
-
-        // Add smooth scrolling for mobile
-        document.addEventListener('touchstart', function() {}, true);
-    </script>
+      }, 50);
+    });
+  }
+
+  function simulateTaskCompletion() {
+    activityTracker.completeTask();
+    console.log('Task completed!');
+  }
+
+  function simulateLogin() {
+    activityTracker.trackSession();
+    activityTracker.updateStatsDisplay();
+    console.log('New session tracked!');
+  }
+
+  function resetStats() {
+    if (confirm('Are you sure you want to reset all activity stats?')) {
+      activityTracker.resetStats();
+      console.log('Stats reset!');
+    }
+  }
+
+  window.ProdActivitiesTracker = {
+    completeTask: () => activityTracker.completeTask(),
+    trackSession: () => activityTracker.trackSession(),
+    getStats: () => activityTracker.getStats()
+  };
+
+  window.addEventListener('storage', function (e) {
+    if (['profilePicture', 'currentUser', 'userActivity'].includes(e.key)) {
+      loadUserProfile();
+    }
+  });
+
+  document.addEventListener('touchstart', function () {}, true);
+</script>
 </body>
 </html>
