@@ -86,12 +86,6 @@
     const signupBtn = document.getElementById('signupBtn');
     const message = document.getElementById('message');
     const messageText = document.getElementById('messageText');
-    const debugInfo = document.getElementById('debugInfo');
-    const userStatus = document.getElementById('userStatus');
-
-    // Show debug info (remove in production)
-    debugInfo.classList.remove('hidden');
-
     // Utility functions
     function showMessage(text, isError = false) {
       messageText.textContent = text;
