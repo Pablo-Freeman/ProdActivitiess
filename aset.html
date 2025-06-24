@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProdActivities - Settings</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ProdActivities - Settings</title>
     <style>
         * {
             margin: 0;
@@ -56,7 +56,8 @@
 
         .header-bottom {
             display: flex;
-            justify-content: flex-end;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .back-arrow {
@@ -81,6 +82,12 @@
             display: flex;
             align-items: center;
             gap: 15px;
+        }
+
+        .user-greeting {
+            font-size: 16px;
+            font-weight: 500;
+            opacity: 0.9;
         }
 
         .logout-btn {
@@ -202,6 +209,21 @@
             color: #999;
         }
 
+        .profile-info {
+            flex: 1;
+        }
+
+        .profile-name {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .profile-email {
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
         .upload-btn {
             padding: 12px 20px;
             border: none;
@@ -287,6 +309,25 @@
             display: none;
         }
 
+        /* Success message */
+        .success-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #00f5a0;
+            color: #000;
+            padding: 12px 20px;
+            border-radius: 25px;
+            font-weight: 600;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+
+        .success-message.show {
+            transform: translateX(0);
+        }
+
         /* Responsive design */
         @media (max-width: 480px) {
             .settings-container {
@@ -296,167 +337,339 @@
             .header {
                 padding: 15px;
             }
+
+            .profile-picture-section {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .profile-info {
+                margin-top: 15px;
+            }
         }
     </style>
 </head>
 <body class="light">
-    <div class="header">
-        <div class="header-top">
-            <div class="back-arrow">←</div>
-            <div class="logo">ProdActivities</div>
-            <div class="header-right">
-                <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
-            </div>
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-top">
+      <div class="back-arrow">←</div>
+      <div class="logo">ProdActivities</div>
+      <div class="header-right">
+        <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
+      </div>
+    </div>
+    <div class="header-bottom">
+      <div class="user-greeting">Hello, <span id="headerUsername">User</span>!</div>
+      <button class="logout-btn" onclick="logout()">Log out</button>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="settings-container">
+    <div class="setting-section">
+      <h3 class="setting-title">Profile Information</h3>
+      <div class="profile-picture-section">
+        <div class="profile-picture" id="profilePicture">🖼️</div>
+        <div class="profile-info">
+          <div class="profile-name" id="profileName">User</div>
+          <div class="profile-email" id="profileEmail">user@example.com</div>
         </div>
-        <div class="header-bottom">
-            <button class="logout-btn" onclick="logout()">Log out</button>
-        </div>
+        <button class="upload-btn" onclick="triggerFileInput()">Upload Image</button>
+        <input type="file" id="fileInput" accept="image/*" onchange="handleFileUpload(event)">
+      </div>
     </div>
 
-    <div class="settings-container">
-        <div class="setting-section">
-            <h3 class="setting-title">Change Profile Picture</h3>
-            <div class="profile-picture-section">
-                <div class="profile-picture" id="profilePicture">🖼️</div>
-                <button class="upload-btn" onclick="triggerFileInput()">Upload Image</button>
-                <input type="file" id="fileInput" accept="image/*" onchange="handleFileUpload(event)">
-            </div>
-        </div>
-
-        <div class="setting-section">
-            <h3 class="setting-title">Change Username</h3>
-            <div class="input-group">
-                <input type="text" class="input-field" placeholder="Enter your current username here.">
-                <input type="text" class="input-field" placeholder="Enter your new username here.">
-            </div>
-        </div>
-
-        <div class="setting-section">
-            <h3 class="setting-title">Change Password</h3>
-            <div class="input-group">
-                <input type="password" class="input-field" placeholder="Enter your current password here.">
-                <input type="password" class="input-field" placeholder="Enter your new password here.">
-            </div>
-        </div>
-
-        <div class="setting-section">
-            <h3 class="setting-title">Change Email</h3>
-            <div class="input-group">
-                <input type="email" class="input-field" placeholder="Enter your current email here.">
-                <input type="email" class="input-field" placeholder="Enter your new email here.">
-            </div>
-        </div>
-
-        <button class="save-btn" onclick="saveChanges()">Save Changes</button>
+    <div class="setting-section">
+      <h3 class="setting-title">Change Username</h3>
+      <div class="input-group">
+        <input type="text" class="input-field" id="currentUsername" placeholder="Enter your current username here.">
+        <input type="text" class="input-field" id="newUsername" placeholder="Enter your new username here." oninput="previewNameChange()">
+      </div>
     </div>
 
-    <script>
-        // Theme toggle functionality
-        function toggleTheme() {
-            const body = document.body;
-            const themeToggle = document.querySelector('.theme-toggle');
-            
-            if (body.classList.contains('light')) {
-                body.classList.remove('light');
-                body.classList.add('dark');
-                themeToggle.textContent = '☀️';
-                localStorage.setItem('theme', 'dark');
-            } else {
-                body.classList.remove('dark');
-                body.classList.add('light');
-                themeToggle.textContent = '🌙';
-                localStorage.setItem('theme', 'light');
-            }
-        }
+    <div class="setting-section">
+      <h3 class="setting-title">Change Password</h3>
+      <div class="input-group">
+        <input type="password" class="input-field" id="currentPassword" placeholder="Enter your current password here.">
+        <input type="password" class="input-field" id="newPassword" placeholder="Enter your new password here.">
+      </div>
+    </div>
 
-        // Load saved theme on page load
-        window.addEventListener('load', function() {
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            const body = document.body;
-            const themeToggle = document.querySelector('.theme-toggle');
-            
-            body.classList.remove('light', 'dark');
-            body.classList.add(savedTheme);
-            themeToggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
-        });
+    <div class="setting-section">
+      <h3 class="setting-title">Change Email</h3>
+      <div class="input-group">
+        <input type="email" class="input-field" id="currentEmail" placeholder="Enter your current email here.">
+        <input type="email" class="input-field" id="newEmail" placeholder="Enter your new email here." oninput="previewEmailChange()">
+      </div>
+    </div>
 
-        // Logout functionality
-        function logout() {
-            // Clear any stored user data
-            localStorage.removeItem('userData');
-            localStorage.removeItem('userSession');
-            
-            // Show confirmation
-            if (confirm('Are you sure you want to log out?')) {
-                // Redirect to login page
-                window.location.href = 'log in.html';
-            }
-        }
+    <button class="save-btn" onclick="saveChanges()">Save Changes</button>
+  </div>
 
-        // File upload functionality
-        function triggerFileInput() {
-            document.getElementById('fileInput').click();
-        }
+  <!-- Success Message -->
+  <div class="success-message" id="successMessage">Changes saved successfully!</div>
 
-        function handleFileUpload(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const profilePicture = document.getElementById('profilePicture');
-                    profilePicture.innerHTML = `<img src="${e.target.result}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 10px;">`;
-                };
-                reader.readAsDataURL(file);
-            }
-        }
+  <!-- SCRIPT -->
+  <!-- Replace the entire script section in aset.html with this: -->
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
-        // Save changes functionality
-        function saveChanges() {
-            // Get all input values
-            const inputs = document.querySelectorAll('.input-field');
-            const userData = {};
-            
-            // Collect form data
-            inputs.forEach((input, index) => {
-                if (input.value.trim()) {
-                    userData[`field_${index}`] = input.value;
-                }
-            });
+  const SUPABASE_URL = 'https://utecoensjmonkiyzswil.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV0ZWNvZW5zam1vbmtpeXpzd2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg2OTg1NDgsImV4cCI6MjA2NDI3NDU0OH0.iv7HM9tdcLAXn9ZHGiPSrYQXsiIGim46LHZMHa1w0sU';
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-            // Simulate saving (in a real app, this would be an API call)
-            console.log('Saving user data:', userData);
-            
-            // Show success message
-            alert('Changes saved successfully!');
-            
-            // Clear form fields
-            inputs.forEach(input => input.value = '');
-        }
+  let userData = {
+    username: '',
+    email: '',
+    profile_picture_url: ''
+  };
 
-        // Back button functionality
-        document.querySelector('.back-arrow').addEventListener('click', function() {
-            // Go back to previous page or dashboard
-            window.history.back();
-        });
+  // Load user data from Supabase
+  async function loadUserData() {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      console.error("No session found:", sessionError);
+      return;
+    }
 
-        // Input field focus effects
-        document.querySelectorAll('.input-field').forEach(input => {
-            input.addEventListener('focus', function() {
-                this.style.transform = 'translateY(-2px)';
-            });
-            
-            input.addEventListener('blur', function() {
-                this.style.transform = 'translateY(0)';
-            });
-        });
+    const userId = session.user.id;
+    
+    // Fetch profile data
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
 
-        // Profile icon click functionality
-        document.querySelector('.profile-icon').addEventListener('click', function() {
-            alert('Profile menu would open here');
-        });
+    if (error) {
+      console.error("Failed to load profile", error);
+      return;
+    }
 
-        // Add smooth scrolling for mobile
-        document.addEventListener('touchstart', function() {}, true);
-    </script>
+    userData = {
+      username: profile.username || session.user.email.split('@')[0],
+      email: session.user.email,
+      profile_picture_url: profile.profile_picture_url || ''
+    };
+
+    updateAllNameInstances();
+    
+    // Load profile picture if exists
+    if (userData.profile_picture_url) {
+      const profilePicture = document.getElementById('profilePicture');
+      profilePicture.innerHTML = 
+        `<img src="${userData.profile_picture_url}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 10px;">`;
+    }
+  }
+
+  function updateAllNameInstances() {
+    document.getElementById('headerUsername').textContent = userData.username;
+    document.getElementById('profileName').textContent = userData.username;
+    document.getElementById('currentUsername').value = userData.username;
+    document.getElementById('profileEmail').textContent = userData.email;
+    document.getElementById('currentEmail').value = userData.email;
+  }
+
+  function previewNameChange() {
+    const newUsername = document.getElementById('newUsername').value.trim();
+    const name = newUsername || userData.username;
+    document.getElementById('headerUsername').textContent = name;
+    document.getElementById('profileName').textContent = name;
+  }
+
+  function previewEmailChange() {
+    const newEmail = document.getElementById('newEmail').value.trim();
+    document.getElementById('profileEmail').textContent = newEmail || userData.email;
+  }
+
+  function toggleTheme() {
+    const body = document.body;
+    const themeToggle = document.querySelector('.theme-toggle');
+    if (body.classList.contains('light')) {
+      body.classList.replace('light', 'dark');
+      themeToggle.textContent = '☀️';
+      localStorage.setItem('theme', 'dark');
+    } else {
+      body.classList.replace('dark', 'light');
+      themeToggle.textContent = '🌙';
+      localStorage.setItem('theme', 'light');
+    }
+  }
+
+  function loadTheme() {
+    const theme = localStorage.getItem('theme') || 'light';
+    document.body.classList.remove('light', 'dark');
+    document.body.classList.add(theme);
+    document.querySelector('.theme-toggle').textContent = theme === 'dark' ? '☀️' : '🌙';
+  }
+
+  async function logout() {
+    if (confirm('Are you sure you want to log out?')) {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Error signing out:', error);
+      }
+      window.location.href = 'log in.html';
+    }
+  }
+
+  function showSuccessMessage(msg = 'Changes saved successfully!') {
+    const el = document.getElementById('successMessage');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 3000);
+  }
+
+  async function saveChanges() {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      console.error("No session found:", sessionError);
+      return;
+    }
+
+    const userId = session.user.id;
+    const newUsername = document.getElementById('newUsername').value.trim();
+    const newEmail = document.getElementById('newEmail').value.trim();
+    const currentPassword = document.getElementById('currentPassword').value.trim();
+    const newPassword = document.getElementById('newPassword').value.trim();
+
+    let updates = {};
+    let changed = false;
+
+    // Update username in profiles table if changed
+    if (newUsername && newUsername !== userData.username) {
+      updates.username = newUsername;
+      changed = true;
+    }
+
+    // Update email via Supabase auth if changed
+    if (newEmail && newEmail !== userData.email) {
+      const { data, error } = await supabase.auth.updateUser({
+        email: newEmail
+      });
+
+      if (error) {
+        showSuccessMessage(`Error updating email: ${error.message}`);
+        return;
+      }
+
+      updates.email = newEmail;
+      changed = true;
+    }
+
+    // Update password if both fields are filled
+    if (currentPassword && newPassword) {
+      const { data, error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (error) {
+        showSuccessMessage(`Error updating password: ${error.message}`);
+        return;
+      }
+
+      changed = true;
+    }
+
+    // Save profile updates to Supabase
+    if (Object.keys(updates).length > 0) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', userId);
+
+      if (error) {
+        showSuccessMessage(`Error saving changes: ${error.message}`);
+        return;
+      }
+
+      // Update local data
+      if (updates.username) userData.username = updates.username;
+      if (updates.email) userData.email = updates.email;
+    }
+
+    if (changed) {
+      updateAllNameInstances();
+      showSuccessMessage('Profile updated successfully!');
+      document.querySelectorAll('.input-field').forEach(i => (i.value = ''));
+      // After saving profile changes
+      window.location.href = 'profile.html?refresh=1';
+    } else {
+      showSuccessMessage('No changes to save');
+    }
+  }
+
+  async function handleFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      console.error("No session found:", sessionError);
+      return;
+    }
+
+    const userId = session.user.id;
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${userId}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+    const filePath = `profile-pictures/${fileName}`;
+
+    // Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('profile-pictures')
+      .upload(filePath, file);
+
+    if (uploadError) {
+      showSuccessMessage(`Error uploading image: ${uploadError.message}`);
+      return;
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('profile-pictures')
+      .getPublicUrl(filePath);
+
+    // Update profile with new picture URL
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ profile_picture_url: publicUrl })
+      .eq('id', userId);
+
+    if (updateError) {
+      showSuccessMessage(`Error updating profile: ${updateError.message}`);
+      return;
+    }
+
+    // Update UI
+    const profilePicture = document.getElementById('profilePicture');
+    profilePicture.innerHTML = `<img src="${publicUrl}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 10px;">`;
+    userData.profile_picture_url = publicUrl;
+    showSuccessMessage('Profile picture updated!');
+  }
+
+  // Initialization on load
+  window.addEventListener('load', async () => {
+    loadTheme();
+    await loadUserData();
+  });
+
+  // Back arrow
+  document.querySelector('.back-arrow').addEventListener('click', () => {
+    window.history.back();
+  });
+
+  // Expose functions to HTML
+  window.saveChanges = saveChanges;
+  window.logout = logout;
+  window.toggleTheme = toggleTheme;
+  window.previewNameChange = previewNameChange;
+  window.previewEmailChange = previewEmailChange;
+  window.triggerFileInput = () => document.getElementById('fileInput').click();
+  window.handleFileUpload = handleFileUpload;
+</script>
 </body>
 </html>
