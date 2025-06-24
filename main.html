@@ -7,7 +7,6 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    
     /* Dark mode styles */
     .dark .bg-custom { background-color: #2af2a0; }
     .light .bg-custom { background-color: #2af2a0; }
@@ -104,7 +103,7 @@
       image-orientation: from-image;
     }
     
-    .date-cell:hover .date-image {
+    .date-cell.has-image:hover .date-image {
       display: block;
       animation: fadeInScale 0.2s ease-out;
     }
@@ -274,6 +273,10 @@
       color: #1f2937;
     }
     
+    .dark .month-year {
+      color: white;
+    }
+    
     /* Calendar headers */
     .calendar-header {
       display: grid;
@@ -427,6 +430,40 @@
       height: 40px;
       border-radius: 50%;
     }
+
+    /* Confirmation modal */
+    .confirmation-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .confirmation-content {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .dark .confirmation-content {
+      background: #2a2a2a;
+    }
+
+    .confirmation-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      margin-top: 20px;
+    }
   </style>
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 text-black dark:text-white transition duration-300">
@@ -441,7 +478,7 @@
           <span class="hidden sm:inline">Profile</span>
         </button>
         <button onclick="toggleMode()" class="header-btn header-btn-round" id="modeToggle" title="Toggle Theme">🌞</button>
-        <button onclick="window.location.href='log in.html'" class="header-btn" title="Logout">
+       <button onclick="logout()" id="logoutBtn" class="header-btn" title="Logout">
           <span class="mr-1">🚪</span>
           <span class="hidden sm:inline">Logout</span>
         </button>
@@ -521,7 +558,7 @@
       <div id="taskList" class="space-y-3"></div>
     </div>
 
-    <!-- Popup -->
+    <!-- Activity Popup -->
     <div id="popup" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 hidden z-50">
       <div class="popup-content">
         <h3 class="font-bold mb-4 text-xl">Add Activity for <span id="selectedDate"></span></h3>
@@ -539,113 +576,209 @@
       </div>
     </div>
 
+    <!-- Confirmation Modal -->
+    <div id="confirmationModal" class="confirmation-modal hidden">
+      <div class="confirmation-content">
+        <h3 class="font-bold text-lg mb-4">This date already has activities</h3>
+        <p>Would you like to view existing activities or add a new one?</p>
+        <div class="confirmation-buttons">
+          <button onclick="viewExistingActivities()" class="btn-secondary">View Activities</button>
+          <button onclick="addNewActivity()" class="btn-primary">Add New</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script>
   document.addEventListener('DOMContentLoaded', async function() {
-    // Configuration
-    const SUPABASE_URL = 'https://utecoensjmonkiyzswil.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV0ZWNvZW5zam1vbmtpeXpzd2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg2OTg1NDgsImV4cCI6MjA2NDI3NDU0OH0.iv7HM9tdcLAXn9ZHGiPSrYQXsiIGim46LHZMHa1w0sU';
-    
-    // Initialize Supabase only if key is provided
-    let supabase = null;
-    let useCloudStorage = false;
-    
-    if (SUPABASE_KEY && SUPABASE_KEY !== 'YOUR_SUPABASE_ANON_KEY_HERE') {
-      try {
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        useCloudStorage = true;
-        console.log('Cloud storage enabled');
-      } catch (error) {
-        console.error('Failed to initialize Supabase:', error);
-        showError('Failed to connect to cloud storage. Using local storage only.');
-      }
-    } else {
-      console.log('Using local storage only');
-      showError('Cloud storage not configured. Using local storage only.');
+  // Configuration
+  const SUPABASE_URL = 'https://utecoensjmonkiyzswil.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV0ZWNvZW5zam1vbmtpeXpzd2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg2OTg1NDgsImV4cCI6MjA2NDI3NDU0OH0.iv7HM9tdcLAXn9ZHGiPSrYQXsiIGim46LHZMHa1w0sU';
+  
+  // Initialize Supabase
+  let supabase = null;
+  let useCloudStorage = false;
+  let currentUser = null;
+
+  let activities = {}; // Object to store activities by date
+  
+  // Calendar variables
+  let currentMonth = new Date().getMonth(); // Current month (0-11)
+  let currentYear = new Date().getFullYear(); // Current year
+  let selectedDate = ''; // Currently selected date in YYYY-MM-DD format
+
+  // DOM elements
+  const monthYear = document.getElementById('monthYear');
+  const calendarDays = document.getElementById('calendarDays');
+  const popup = document.getElementById('popup');
+  const confirmationModal = document.getElementById('confirmationModal');
+  const selectedDateText = document.getElementById('selectedDate');
+
+  if (SUPABASE_KEY && SUPABASE_KEY !== 'YOUR_SUPABASE_ANON_KEY_HERE') {
+    try {
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      useCloudStorage = true;
+      console.log('Cloud storage enabled');
+    } catch (error) {
+      console.error('Failed to initialize Supabase:', error);
+      showError('Failed to connect to cloud storage. Using local storage only.');
+    }
+  } else {
+    console.log('Using local storage only');
+    showError('Cloud storage not configured. Using local storage only.');
+  }
+
+  // Authentication check
+  async function checkAuth() {
+    if (!supabase) {
+      console.log('Supabase not initialized, skipping auth check');
+      return false;
     }
 
-    // Global variables
-    let currentMonth = 4; // May
-    let currentYear = 2025;
-    const monthYear = document.getElementById('monthYear');
-    const calendarDays = document.getElementById('calendarDays');
-    const popup = document.getElementById('popup');
-    const selectedDateText = document.getElementById('selectedDate');
-    let selectedDate = '';
-    let activities = {};
-
-    // Load activities from localStorage
-    function loadActivities() {
-      try {
-        activities = JSON.parse(localStorage.getItem('activities') || '{}');
-      } catch (error) {
-        console.error('Error loading activities from localStorage:', error);
-        activities = {};
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('Auth check error:', error);
+        window.location.href = 'log in.html';
+        return false;
       }
+
+      if (!session || !session.user) {
+        console.log('No valid session found, redirecting to login');
+        window.location.href = 'log in.html';
+        return false;
+      }
+      
+      currentUser = session.user;
+      console.log('User authenticated:', currentUser.email);
+      return true;
+      
+    } catch (error) {
+      console.error('Authentication error:', error);
+      window.location.href = 'log in.html';
+      return false;
+    }
+  }
+
+  // Logout function
+  async function logout() {
+    try {
+      if (supabase) {
+        const { error } = await supabase.auth.signOut();
+        if (error) throw error;
+      }
+      window.location.href = 'log in.html';
+    } catch (error) {
+      console.error('Error logging out:', error);
+      showError('Failed to logout');
+    }
+  }
+
+  // Main initialization
+  async function initializeApp() {
+    const isAuthenticated = await checkAuth();
+    if (!isAuthenticated) return;
+
+    try {
+      await loadActivitiesFromSupabase(currentUser.id);
+      await renderCalendar();
+    } catch (error) {
+      console.error('Error initializing app:', error);
+      showError('Failed to initialize application');
+    }
+  }
+
+  // Load activities from Supabase
+  async function loadActivitiesFromSupabase(userId) {
+    if (!supabase || !userId) {
+      console.log('Supabase not initialized or missing user ID');
+      activities = {};
+      return;
     }
 
-    // Save activities to localStorage
-    function saveActivities() {
-      try {
-        localStorage.setItem('activities', JSON.stringify(activities));
-      } catch (error) {
-        console.error('Error saving activities to localStorage:', error);
-        showError('Failed to save activities locally');
-      }
-    }
+    try {
+      const { data, error } = await supabase
+        .from('activities')
+        .select('*')
+        .eq('user_id', userId);
 
-    // Show error message
-    function showError(message) {
-      const errorDisplay = document.getElementById('errorDisplay');
+      if (error) throw error;
+
+      const result = {};
+      data.forEach(activity => {
+        if (!result[activity.date]) result[activity.date] = [];
+        result[activity.date].push(activity);
+      });
+
+      activities = result;
+      console.log("Loaded activities from Supabase:", activities);
+    } catch (error) {
+      console.error("Error loading activities from Supabase:", error.message);
+      throw new Error("Failed to load activities from server.");
+    }
+  }
+
+  // Show error message
+  function showError(message) {
+    const errorDisplay = document.getElementById('errorDisplay');
+    if (errorDisplay) {
       errorDisplay.textContent = message;
       errorDisplay.classList.remove('hidden');
       setTimeout(() => {
         errorDisplay.classList.add('hidden');
       }, 5000);
+    } else {
+      console.error('Error display element not found:', message);
     }
+  }
 
-    // Profile view functions
-    function openProfileView() {
-      updateProfileStats();
-      document.getElementById('profileModal').classList.remove('hidden');
-    }
+  // Profile view functions
+  function openProfileView() {
+    updateProfileStats();
+    document.getElementById('profileModal').classList.remove('hidden');
+  }
 
-    function closeProfileView() {
-      document.getElementById('profileModal').classList.add('hidden');
-    }
+  function closeProfileView() {
+    document.getElementById('profileModal').classList.add('hidden');
+  }
 
-    function updateProfileStats() {
-      // Calculate total activities
-      let totalActivities = 0;
-      let activeDays = 0;
-      let recentActivities = [];
+  function updateProfileStats() {
+    // Calculate total activities
+    let totalActivities = 0;
+    let activeDays = 0;
+    let recentActivities = [];
 
-      for (const [date, dayActivities] of Object.entries(activities)) {
-        if (dayActivities && dayActivities.length > 0) {
-          totalActivities += dayActivities.length;
-          activeDays++;
-          
-          // Add to recent activities (with date info)
-          dayActivities.forEach(activity => {
-            recentActivities.push({
-              ...activity,
-              date: date
-            });
+    for (const [date, dayActivities] of Object.entries(activities)) {
+      if (dayActivities && dayActivities.length > 0) {
+        totalActivities += dayActivities.length;
+        activeDays++;
+        
+        // Add to recent activities (with date info)
+        dayActivities.forEach(activity => {
+          recentActivities.push({
+            ...activity,
+            date: date
           });
-        }
+        });
       }
+    }
 
-      // Sort recent activities by date and take the last 5
-      recentActivities.sort((a, b) => new Date(b.date) - new Date(a.date));
-      recentActivities = recentActivities.slice(0, 5);
+    // Sort recent activities by date and take the last 5
+    recentActivities.sort((a, b) => new Date(b.date) - new Date(a.date));
+    recentActivities = recentActivities.slice(0, 5);
 
-      // Update UI
-      document.getElementById('totalActivities').textContent = totalActivities;
-      document.getElementById('activeDays').textContent = activeDays;
+    // Update UI
+    const totalActivitiesEl = document.getElementById('totalActivities');
+    const activeDaysEl = document.getElementById('activeDays');
+    
+    if (totalActivitiesEl) totalActivitiesEl.textContent = totalActivities;
+    if (activeDaysEl) activeDaysEl.textContent = activeDays;
 
-      // Update recent activities list
-      const recentActivitiesContainer = document.getElementById('recentActivities');
+    // Update recent activities list
+    const recentActivitiesContainer = document.getElementById('recentActivities');
+    if (recentActivitiesContainer) {
       if (recentActivities.length > 0) {
         recentActivitiesContainer.innerHTML = recentActivities.map(activity => `
           <div class="flex justify-between items-center text-sm p-2 bg-gray-50 dark:bg-gray-700 rounded">
@@ -657,322 +790,429 @@
         recentActivitiesContainer.innerHTML = '<p class="text-gray-500 text-sm text-center py-2">No activities yet</p>';
       }
     }
+  }
 
-    // Render calendar
-    async function renderCalendar() {
-      try {
-        console.log('Rendering calendar for:', currentMonth, currentYear);
-        
-        monthYear.textContent = `${new Date(currentYear, currentMonth).toLocaleString('default', { month: 'long' })} ${currentYear}`;
-
-        const firstDay = new Date(currentYear, currentMonth, 1).getDay();
-        const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-        const today = new Date();
-        const isCurrentMonth = today.getFullYear() === currentYear && today.getMonth() === currentMonth;
-
-        let html = '';
-
-        // Add empty cells for days before the first day of the month
-        for (let i = 0; i < firstDay; i++) {
-          html += `<div></div>`;
-        }
-
-        // Generate calendar days
-        for (let day = 1; day <= daysInMonth; day++) {
-          const dateKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          const dateActivities = activities[dateKey] || [];
-          const hasActivities = dateActivities.length > 0;
-          const isToday = isCurrentMonth && today.getDate() === day;
-          
-          html += `
-            <div class="date-cell ${isToday ? 'today' : ''} ${hasActivities ? 'font-bold' : ''}"
-                 onclick="openPopup('${dateKey}')">
-              ${day}
-              ${hasActivities ? '<div class="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full"></div>' : ''}
-            </div>`;
-        }
-
-        calendarDays.innerHTML = html;
-        
-        // Load images asynchronously after calendar is rendered
-        if (useCloudStorage) {
-          loadCalendarImages();
-        }
-
-      } catch (error) {
-        console.error("Error rendering calendar:", error);
-        calendarDays.innerHTML = `<div class="col-span-7 text-red-500 p-4">Error loading calendar: ${error.message}</div>`;
-        showError('Failed to render calendar');
-      }
-    }
-
-    // Load images for calendar (async operation)
-    async function loadCalendarImages() {
-      try {
-        const dateCells = document.querySelectorAll('.date-cell');
-        
-        for (const cell of dateCells) {
-          const dateKey = cell.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
-          if (!dateKey) continue;
-          
-          const dateActivities = activities[dateKey] || [];
-          const activityWithImage = dateActivities.find(activity => activity.image);
-          
-          if (activityWithImage) {
-            const imageUrl = await getImageUrl(activityWithImage.image);
-            if (imageUrl) {
-              cell.innerHTML += `<img src="${imageUrl}" class="date-image" alt="Activity image" 
-                loading="lazy" 
-                onload="console.log('Image loaded:', this.naturalWidth, 'x', this.naturalHeight)" 
-                onerror="console.error('Image failed to load:', this.src); this.style.display='none'">`;
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error loading calendar images:', error);
-      }
-    }
-
-    // Get image URL from Supabase or return local URL
-    async function getImageUrl(imagePath) {
-      if (!imagePath || !useCloudStorage) return '';
-
-      // If it's already a URL, return it
-      if (imagePath.startsWith('http')) {
-        return imagePath;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .storage
-          .from('activity-images')
-          .createSignedUrl(imagePath, 3600);
-
-        if (error) throw error;
-        return data?.signedUrl || '';
-      } catch (error) {
-        console.error("Error getting image URL:", error);
-        return '';
-      }
-    }
-
-    // Navigation functions
-    function prevMonth() {
-      currentMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-      currentYear = currentMonth === 11 ? currentYear - 1 : currentYear;
-      renderCalendar();
-    }
-
-    function nextMonth() {
-      currentMonth = currentMonth === 11 ? 0 : currentMonth + 1;
-      currentYear = currentMonth === 0 ? currentYear + 1 : currentYear;
-      renderCalendar();
-    }
-
-    // Popup functions
-    function openPopup(dateKey) {
-      selectedDate = dateKey;
-      selectedDateText.textContent = dateKey;
-      document.getElementById('activityTime').value = '';
-      document.getElementById('activityText').value = '';
-      document.getElementById('activityImage').value = '';
-      document.getElementById('uploadStatus').classList.add('hidden');
-      popup.classList.remove('hidden');
-      renderTasks();
-    }
-
-    function closePopup() {
-      popup.classList.add('hidden');
-      document.getElementById('taskListContainer').classList.add('hidden');
-    }
-
-    // Save activity
-    async function saveActivity() {
-      const time = document.getElementById('activityTime').value;
-      const text = document.getElementById('activityText').value;
-      const imageFile = document.getElementById('activityImage').files[0];
-
-      if (!text) {
-        alert('Please enter an activity description');
+  // Render calendar
+  async function renderCalendar() {
+    try {
+      console.log('Rendering calendar for:', currentMonth, currentYear);
+      
+      if (!monthYear || !calendarDays) {
+        console.error('Calendar elements not found');
         return;
       }
 
-      const saveButton = document.getElementById('saveButton');
-      const saveText = document.getElementById('saveText');
-      const saveSpinner = document.getElementById('saveSpinner');
-      const uploadStatus = document.getElementById('uploadStatus');
+      monthYear.textContent = `${new Date(currentYear, currentMonth).toLocaleString('default', { month: 'long' })} ${currentYear}`;
 
-      // Show loading state
-      saveText.textContent = 'Saving...';
-      saveSpinner.classList.remove('hidden');
-      saveButton.disabled = true;
+      const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      const today = new Date();
+      const isCurrentMonth = today.getFullYear() === currentYear && today.getMonth() === currentMonth;
 
-      if (!activities[selectedDate]) {
-        activities[selectedDate] = [];
+      let html = '';
+
+      // Add empty cells for days before the first day of the month
+      for (let i = 0; i < firstDay; i++) {
+        html += `<div></div>`;
       }
 
-      const newActivity = { time, text };
+      // Generate calendar days
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dateActivities = activities[dateKey] || [];
+        const hasActivities = dateActivities.length > 0;
+        const isToday = isCurrentMonth && today.getDate() === day;
+        const activityWithImage = hasActivities ? dateActivities.find(activity => activity.image) : null;
+        
+        let cellContent = `
+          <div class="date-cell ${isToday ? 'today' : ''} ${hasActivities ? 'font-bold' : ''} ${activityWithImage ? 'has-image' : ''}"
+               onclick="handleDateClick('${dateKey}')">
+            ${day}
+            ${hasActivities ? '<div class="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full"></div>' : ''}
+        `;
 
-      try {
-        if (imageFile && useCloudStorage) {
+        if (activityWithImage) {
+          const imageUrl = await getImageUrl(activityWithImage.image);
+          if (imageUrl) {
+            cellContent += `
+              <img src="${imageUrl}" class="date-image" alt="Activity image" 
+                loading="lazy" 
+                onload="console.log('Image loaded:', this.naturalWidth, 'x', this.naturalHeight)" 
+                onerror="console.error('Image failed to load:', this.src); this.style.display='none'">
+            `;
+          }
+        }
+
+        cellContent += `</div>`;
+        html += cellContent;
+      }
+
+      calendarDays.innerHTML = html;
+
+    } catch (error) {
+      console.error("Error rendering calendar:", error);
+      if (calendarDays) {
+        calendarDays.innerHTML = `<div class="col-span-7 text-red-500 p-4">Error loading calendar: ${error.message}</div>`;
+      }
+      showError('Failed to render calendar');
+    }
+  }
+
+  // Get image URL from Supabase or return local URL
+  async function getImageUrl(imagePath) {
+    if (!imagePath || !useCloudStorage) return '';
+
+    // If it's already a URL, return it
+    if (imagePath.startsWith('http') || imagePath.startsWith('data:')) {
+      return imagePath;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .storage
+        .from('activity-images')
+        .createSignedUrl(imagePath, 3600);
+
+      if (error) throw error;
+      return data?.signedUrl || '';
+    } catch (error) {
+      console.error("Error getting image URL:", error);
+      return '';
+    }
+  }
+
+  // Navigation functions
+  function prevMonth() {
+    currentMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    currentYear = currentMonth === 11 ? currentYear - 1 : currentYear;
+    renderCalendar();
+  }
+
+  function nextMonth() {
+    currentMonth = currentMonth === 11 ? 0 : currentMonth + 1;
+    currentYear = currentMonth === 0 ? currentYear + 1 : currentYear;
+    renderCalendar();
+  }
+
+  // Handle date click - shows confirmation if date has activities
+  function handleDateClick(dateKey) {
+    selectedDate = dateKey;
+    const dateActivities = activities[dateKey] || [];
+    
+    if (dateActivities.length > 0) {
+      // Show confirmation modal
+      if (confirmationModal) {
+        confirmationModal.classList.remove('hidden');
+      }
+    } else {
+      // No activities, go straight to adding new
+      openActivityPopup();
+    }
+  }
+
+  // View existing activities
+  function viewExistingActivities() {
+    if (confirmationModal) {
+      confirmationModal.classList.add('hidden');
+    }
+    renderTasks();
+    const taskListContainer = document.getElementById('taskListContainer');
+    if (taskListContainer) {
+      taskListContainer.classList.remove('hidden');
+    }
+  }
+
+  // Add new activity
+  function addNewActivity() {
+    if (confirmationModal) {
+      confirmationModal.classList.add('hidden');
+    }
+    openActivityPopup();
+  }
+
+  // Open activity popup
+  function openActivityPopup() {
+    if (selectedDateText) {
+      const dateObj = new Date(selectedDate);
+      selectedDateText.textContent = dateObj.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+    }
+    
+    const activityTime = document.getElementById('activityTime');
+    const activityText = document.getElementById('activityText');
+    const activityImage = document.getElementById('activityImage');
+    const uploadStatus = document.getElementById('uploadStatus');
+    
+    if (activityTime) activityTime.value = '';
+    if (activityText) activityText.value = '';
+    if (activityImage) activityImage.value = '';
+    if (uploadStatus) uploadStatus.classList.add('hidden');
+    
+    if (popup) {
+      popup.classList.remove('hidden');
+    }
+  }
+
+  function closePopup() {
+    if (popup) {
+      popup.classList.add('hidden');
+    }
+    const taskListContainer = document.getElementById('taskListContainer');
+    if (taskListContainer) {
+      taskListContainer.classList.add('hidden');
+    }
+  }
+
+  // Save activity
+  async function saveActivity() {
+    const timeEl = document.getElementById('activityTime');
+    const textEl = document.getElementById('activityText');
+    const imageEl = document.getElementById('activityImage');
+    
+    const time = timeEl ? timeEl.value : '';
+    const text = textEl ? textEl.value : '';
+    const imageFile = imageEl ? imageEl.files[0] : null;
+
+    if (!text) {
+      alert('Please enter an activity description');
+      return;
+    }
+
+    const saveButton = document.getElementById('saveButton');
+    const saveText = document.getElementById('saveText');
+    const saveSpinner = document.getElementById('saveSpinner');
+    const uploadStatus = document.getElementById('uploadStatus');
+
+    // Show loading state
+    if (saveText) saveText.textContent = 'Saving...';
+    if (saveSpinner) saveSpinner.classList.remove('hidden');
+    if (saveButton) saveButton.disabled = true;
+
+    if (!activities[selectedDate]) {
+      activities[selectedDate] = [];
+    }
+
+    const newActivity = { time, text };
+
+    try {
+      if (imageFile && useCloudStorage) {
+        if (uploadStatus) {
           uploadStatus.textContent = 'Uploading image...';
           uploadStatus.classList.remove('hidden');
+        }
 
-          // Generate unique filename
-          const fileExt = imageFile.name.split('.').pop();
-          const fileName = `${selectedDate}-${Date.now()}.${fileExt}`;
+        // Generate unique filename
+        const fileExt = imageFile.name.split('.').pop();
+        const fileName = `${selectedDate}-${Date.now()}.${fileExt}`;
 
-          // Upload to Supabase storage
-          const { data, error } = await supabase
-            .storage
-            .from('activity-images')
-            .upload(fileName, imageFile);
+        // Upload to Supabase storage
+        const { data, error } = await supabase
+          .storage
+          .from('activity-images')
+          .upload(fileName, imageFile);
 
-          if (error) throw error;
+        if (error) throw error;
 
-          newActivity.image = fileName;
+        newActivity.image = fileName;
+        if (uploadStatus) {
           uploadStatus.textContent = 'Image uploaded successfully!';
           uploadStatus.classList.remove('text-red-500');
           uploadStatus.classList.add('text-green-500');
-        } else if (imageFile && !useCloudStorage) {
-          // For local storage, create a data URL
-          const reader = new FileReader();
-          reader.onload = function(e) {
-            newActivity.image = e.target.result;
-            activities[selectedDate].push(newActivity);
-            saveActivities();
-            closePopup();
-            renderCalendar();
-          };
-          reader.readAsDataURL(imageFile);
-          return;
         }
+      } else if (imageFile && !useCloudStorage) {
+        // For local storage, create a data URL
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          newActivity.image = e.target.result;
+          activities[selectedDate].push(newActivity);
+          closePopup();
+          renderCalendar();
+        };
+        reader.readAsDataURL(imageFile);
+        return;
+      }
 
-        activities[selectedDate].push(newActivity);
-        saveActivities();
-        closePopup();
-        await renderCalendar();
-      } catch (error) {
-        console.error('Error saving activity:', error);
+      // Save to Supabase database if available
+      if (supabase && currentUser) {
+        const { data, error } = await supabase
+          .from('activities')
+          .insert([{
+            user_id: currentUser.id,
+            date: selectedDate,
+            time: time,
+            text: text,
+            image: newActivity.image || null
+          }])
+          .select();
+
+        if (error) throw error;
+        
+        // Update local activities with the returned data (including ID)
+        if (data && data.length > 0) {
+          newActivity.id = data[0].id;
+        }
+      }
+
+      activities[selectedDate].push(newActivity);
+      closePopup();
+      await renderCalendar();
+    } catch (error) {
+      console.error('Error saving activity:', error);
+      if (uploadStatus) {
         uploadStatus.textContent = 'Error: ' + error.message;
         uploadStatus.classList.remove('text-green-500');
         uploadStatus.classList.add('text-red-500');
         uploadStatus.classList.remove('hidden');
-        showError('Failed to save activity');
-      } finally {
-        // Reset button state
-        saveText.textContent = 'Save';
-        saveSpinner.classList.add('hidden');
-        saveButton.disabled = false;
       }
+      showError('Failed to save activity');
+    } finally {
+      // Reset button state
+      if (saveText) saveText.textContent = 'Save';
+      if (saveSpinner) saveSpinner.classList.add('hidden');
+      if (saveButton) saveButton.disabled = false;
+    }
+  }
+
+  // Render tasks
+  async function renderTasks() {
+    const taskList = document.getElementById('taskList');
+    const taskDateLabel = document.getElementById('taskDateLabel');
+    const taskListContainer = document.getElementById('taskListContainer');
+    
+    if (!taskList) return;
+    
+    taskList.innerHTML = '';
+    if (taskDateLabel) {
+      const dateObj = new Date(selectedDate);
+      taskDateLabel.textContent = dateObj.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
     }
 
-    // Render tasks
-    async function renderTasks() {
-      const taskList = document.getElementById('taskList');
-      const taskDateLabel = document.getElementById('taskDateLabel');
-      const taskListContainer = document.getElementById('taskListContainer');
+    if (selectedDate && activities[selectedDate] && activities[selectedDate].length > 0) {
+      if (taskListContainer) {
+        taskListContainer.classList.remove('hidden');
+      }
       
-      taskList.innerHTML = '';
-      taskDateLabel.textContent = selectedDate || 'No date selected';
+      // Sort activities by time
+      const sortedActivities = [...activities[selectedDate]].sort((a, b) => {
+        if (!a.time && !b.time) return 0;
+        if (!a.time) return 1;
+        if (!b.time) return -1;
+        return a.time.localeCompare(b.time);
+      });
 
-      if (selectedDate && activities[selectedDate] && activities[selectedDate].length > 0) {
-        taskListContainer.classList.remove('hidden');
-        
-        for (const [index, task] of activities[selectedDate].entries()) {
-          let imageHtml = '';
-          if (task.image) {
-            if (useCloudStorage && !task.image.startsWith('data:')) {
-              const imageUrl = await getImageUrl(task.image);
-              if (imageUrl) {
-                imageHtml = `<img src="${imageUrl}" class="w-8 h-8 rounded-full object-cover ml-2" onerror="this.style.display='none'">`;
-              }
-            } else if (task.image.startsWith('data:')) {
-              imageHtml = `<img src="${task.image}" class="w-8 h-8 rounded-full object-cover ml-2">`;
+      for (const [index, task] of sortedActivities.entries()) {
+        let imageHtml = '';
+        if (task.image) {
+          if (useCloudStorage && !task.image.startsWith('data:')) {
+            const imageUrl = await getImageUrl(task.image);
+            if (imageUrl) {
+              imageHtml = `<img src="${imageUrl}" class="w-8 h-8 rounded-full object-cover ml-2" onerror="this.style.display='none'">`;
             }
+          } else if (task.image.startsWith('data:')) {
+            imageHtml = `<img src="${task.image}" class="w-8 h-8 rounded-full object-cover ml-2">`;
           }
-
-          taskList.innerHTML += `
-            <div class="activity-card">
-              <div class="flex items-center flex-1">
-                <div class="activity-time">${task.time || 'All day'}</div>
-                <div class="activity-text">${task.text}</div>
-                ${imageHtml}
-              </div>
-              <div class="activity-actions">
-                <button class="delete-btn" onclick="deleteTask(${index})" title="Delete activity">🗑️</button>
-              </div>
-            </div>`;
         }
-      } else {
+
+        taskList.innerHTML += `
+          <div class="activity-card">
+            <div class="flex items-center flex-1">
+              <div class="activity-time">${task.time || 'All day'}</div>
+              <div class="activity-text">${task.text}</div>
+              ${imageHtml}
+            </div>
+            <div class="activity-actions">
+              <button class="delete-btn" onclick="deleteTask(${index})" title="Delete activity">🗑️</button>
+            </div>
+          </div>`;
+      }
+    } else {
+      if (taskListContainer) {
         taskListContainer.classList.remove('hidden');
-        taskList.innerHTML = `<p class="text-gray-500 text-center py-8">No activities scheduled for this date.</p>`;
+      }
+      taskList.innerHTML = `<p class="text-gray-500 text-center py-8">No activities scheduled for this date.</p>`;
+    }
+  }
+
+  // Delete task
+  async function deleteTask(index) {
+    if (confirm('Are you sure you want to delete this activity?')) {
+      try {
+        const activity = activities[selectedDate][index];
+
+        // Delete from Supabase
+        if (activity.id && supabase) {
+          const { error } = await supabase
+            .from('activities')
+            .delete()
+            .eq('id', activity.id);
+          if (error) throw error;
+        }
+
+        // Delete image from storage if it exists
+        if (activity.image && supabase && !activity.image.startsWith('data:')) {
+          try {
+            await supabase
+              .storage
+              .from('activity-images')
+              .remove([activity.image]);
+          } catch (storageError) {
+            console.error('Error deleting image:', storageError);
+          }
+        }
+
+        // Delete from local memory
+        activities[selectedDate].splice(index, 1);
+        if (activities[selectedDate].length === 0) {
+          delete activities[selectedDate];
+        }
+
+        renderTasks();          // update task list view
+        renderCalendar();       // refresh calendar badges
+      } catch (error) {
+        console.error('Error deleting task:', error);
+        showError('Failed to delete activity');
       }
     }
+  }
 
-    // Delete task
-    async function deleteTask(index) {
-      if (confirm('Are you sure you want to delete this activity?')) {
-        try {
-          const activity = activities[selectedDate][index];
-
-          // Delete image from storage if it exists and using cloud storage
-          if (activity.image && useCloudStorage && !activity.image.startsWith('data:')) {
-            try {
-              const { error } = await supabase
-                .storage
-                .from('activity-images')
-                .remove([activity.image]);
-
-              if (error) console.error('Error deleting image:', error);
-            } catch (error) {
-              console.error('Error deleting image:', error);
-            }
-          }
-
-          // Remove activity
-          activities[selectedDate].splice(index, 1);
-          if (activities[selectedDate].length === 0) {
-            delete activities[selectedDate];
-          }
-          
-          saveActivities();
-          renderTasks();
-          renderCalendar();
-        } catch (error) {
-          console.error('Error deleting task:', error);
-          showError('Failed to delete activity');
-        }
-      }
-    }
-
-    // Toggle dark/light mode
-    function toggleMode() {
-      const html = document.documentElement;
-      const modeToggle = document.getElementById('modeToggle');
-      html.classList.toggle('dark');
-      html.classList.toggle('light');
+  // Toggle dark/light mode
+  function toggleMode() {
+    const html = document.documentElement;
+    const modeToggle = document.getElementById('modeToggle');
+    html.classList.toggle('dark');
+    html.classList.toggle('light');
+    if (modeToggle) {
       modeToggle.textContent = html.classList.contains('dark') ? '🌙' : '🌞';
     }
+  }
 
-    // Initialize app
-    try {
-      loadActivities();
-      await renderCalendar();
-    } catch (error) {
-      console.error('Error initializing app:', error);
-      showError('Failed to initialize application');
-    }
+  // Initialize app
+  initializeApp();
 
-    // Expose functions to global scope for HTML onclick handlers
-    window.openPopup = openPopup;
-    window.prevMonth = prevMonth;
-    window.nextMonth = nextMonth;
-    window.saveActivity = saveActivity;
-    window.closePopup = closePopup;
-    window.deleteTask = deleteTask;
-    window.toggleMode = toggleMode;
-  });
-  </script>
+  // Expose functions to global scope
+  window.logout = logout;
+  window.handleDateClick = handleDateClick;
+  window.prevMonth = prevMonth;
+  window.nextMonth = nextMonth;
+  window.saveActivity = saveActivity;
+  window.closePopup = closePopup;
+  window.deleteTask = deleteTask;
+  window.toggleMode = toggleMode;
+  window.viewExistingActivities = viewExistingActivities;
+  window.addNewActivity = addNewActivity;
+  window.openProfileView = openProfileView;
+  window.closeProfileView = closeProfileView;
+  window.openActivityPopup = openActivityPopup;
+});
+</script>
 </body>
 </html>
