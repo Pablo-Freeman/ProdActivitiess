@@ -5,10 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Login | ProdActivities</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link href="https://fonts.googleapis.com/css2?family=Comic+Neue&display=swap" rel="stylesheet" />
   <style>
     body {
       font-family: 'Comic Neue', cursive;
+    }
+    .loading {
+      opacity: 0.6;
+      pointer-events: none;
     }
   </style>
 </head>
@@ -28,43 +33,101 @@
     <!-- Login Form -->
     <div id="loginForm">
       <label class="block text-lg">Email</label>
-      <input type="email" placeholder="Enter Email" class="w-full border rounded-full px-4 py-2 mt-1 mb-4"/>
+      <input type="email" placeholder="Enter Email" class="w-full border rounded-full px-4 py-2 mt-1 mb-4" required/>
 
       <label class="block text-lg">Password</label>
-      <input type="password" placeholder="Enter Password" class="w-full border rounded-full px-4 py-2 mt-1 mb-6"/>
+      <input type="password" placeholder="Enter Password" class="w-full border rounded-full px-4 py-2 mt-1 mb-6" required/>
 
-      <button class="bg-[#2af2a0] w-full py-2 rounded-full">Log in</button>
+      <button id="loginBtn" class="bg-[#2af2a0] w-full py-2 rounded-full hover:bg-[#24d18a] transition-colors">
+        <span class="login-text">Log in</span>
+        <span class="login-loading hidden">Logging in...</span>
+      </button>
     </div>
 
     <!-- Sign Up Form -->
     <div id="signupForm" class="hidden">
       <label class="block text-lg">Username</label>
-      <input type="text" placeholder="Enter Username" class="w-full border rounded-full px-4 py-2 mt-1 mb-4"/>
+      <input type="text" placeholder="Enter Username" class="w-full border rounded-full px-4 py-2 mt-1 mb-4" required/>
 
       <label class="block text-lg">Email</label>
-      <input type="email" placeholder="Enter Email" class="w-full border rounded-full px-4 py-2 mt-1 mb-4"/>
+      <input type="email" placeholder="Enter Email" class="w-full border rounded-full px-4 py-2 mt-1 mb-4" required/>
 
       <label class="block text-lg">Password</label>
-      <input type="password" placeholder="Enter Password" class="w-full border rounded-full px-4 py-2 mt-1 mb-4"/>
+      <input type="password" placeholder="Enter Password (min 6 characters)" class="w-full border rounded-full px-4 py-2 mt-1 mb-4" required minlength="6"/>
 
       <label class="block text-lg">Re-enter Password</label>
-      <input type="password" placeholder="Re-enter Password" class="w-full border rounded-full px-4 py-2 mt-1 mb-6"/>
+      <input type="password" placeholder="Re-enter Password" class="w-full border rounded-full px-4 py-2 mt-1 mb-6" required/>
 
-      <button class="bg-[#2af2a0] w-full py-2 rounded-full">Sign Up</button>
+      <button id="signupBtn" class="bg-[#2af2a0] w-full py-2 rounded-full hover:bg-[#24d18a] transition-colors">
+        <span class="signup-text">Sign Up</span>
+        <span class="signup-loading hidden">Creating account...</span>
+      </button>
+    </div>
+
+    <!-- Error/Success Messages -->
+    <div id="message" class="mt-4 p-3 rounded-lg hidden">
+      <p id="messageText"></p>
+    </div>
+
+    <!-- Debug info (remove in production) -->
+    <div id="debugInfo" class="mt-4 p-2 bg-gray-100 text-xs rounded hidden">
+      <p>Debug: <span id="userStatus">Checking...</span></p>
     </div>
   </div>
 
   <script>
+    // Initialize Supabase
+    // Replace these with your actual Supabase URL and anon key
+    const SUPABASE_URL = 'https://utecoensjmonkiyzswil.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV0ZWNvZW5zam1vbmtpeXpzd2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg2OTg1NDgsImV4cCI6MjA2NDI3NDU0OH0.iv7HM9tdcLAXn9ZHGiPSrYQXsiIGim46LHZMHa1w0sU';
+    
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // DOM elements
     const loginTab = document.getElementById('loginTab');
     const signupTab = document.getElementById('signupTab');
     const loginForm = document.getElementById('loginForm');
     const signupForm = document.getElementById('signupForm');
+    const loginBtn = document.getElementById('loginBtn');
+    const signupBtn = document.getElementById('signupBtn');
+    const message = document.getElementById('message');
+    const messageText = document.getElementById('messageText');
+    const debugInfo = document.getElementById('debugInfo');
+    const userStatus = document.getElementById('userStatus');
 
+    // Show debug info (remove in production)
+    debugInfo.classList.remove('hidden');
+
+    // Utility functions
+    function showMessage(text, isError = false) {
+      messageText.textContent = text;
+      message.className = `mt-4 p-3 rounded-lg ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`;
+      message.classList.remove('hidden');
+      setTimeout(() => message.classList.add('hidden'), 5000);
+    }
+
+    function setLoading(button, isLoading) {
+      const textSpan = button.querySelector('span:first-child');
+      const loadingSpan = button.querySelector('span:last-child');
+      
+      if (isLoading) {
+        button.classList.add('loading');
+        textSpan.classList.add('hidden');
+        loadingSpan.classList.remove('hidden');
+      } else {
+        button.classList.remove('loading');
+        textSpan.classList.remove('hidden');
+        loadingSpan.classList.add('hidden');
+      }
+    }
+
+    // Tab switching
     loginTab.addEventListener('click', () => {
       loginForm.classList.remove('hidden');
       signupForm.classList.add('hidden');
       loginTab.classList.add('bg-[#2af2a0]');
       signupTab.classList.remove('bg-[#2af2a0]');
+      message.classList.add('hidden');
     });
 
     signupTab.addEventListener('click', () => {
@@ -72,52 +135,198 @@
       signupForm.classList.remove('hidden');
       signupTab.classList.add('bg-[#2af2a0]');
       loginTab.classList.remove('bg-[#2af2a0]');
+      message.classList.add('hidden');
     });
 
-    // Signup logic
-    signupForm.querySelector('button').addEventListener('click', () => {
+    // Check if user is already logged in - FIXED VERSION
+    async function checkUser() {
+      try {
+        userStatus.textContent = 'Checking user session...';
+        
+        // Get the current session
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Session check error:', error);
+          userStatus.textContent = `Session error: ${error.message}`;
+          return;
+        }
+
+        if (session && session.user) {
+          userStatus.textContent = `User found: ${session.user.email}`;
+          console.log('User is logged in:', session.user);
+          
+          // Only redirect if we're sure the user is authenticated
+          // and not on a logout redirect
+          const urlParams = new URLSearchParams(window.location.search);
+          const fromLogout = urlParams.get('logout') === 'true';
+          
+          if (!fromLogout) {
+            showMessage("You're already logged in. Redirecting...");
+            setTimeout(() => {
+              window.location.href = 'main.html';
+            }, 1500);
+          } else {
+            // User was redirected from logout, clear the session
+            await supabase.auth.signOut();
+            userStatus.textContent = 'Logged out successfully';
+          }
+        } else {
+          userStatus.textContent = 'No active session';
+          console.log('No user session found');
+        }
+      } catch (error) {
+        console.error('Error checking user:', error);
+        userStatus.textContent = `Error: ${error.message}`;
+      }
+    }
+
+    // Sign up logic
+    signupBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      setLoading(signupBtn, true);
+
       const username = signupForm.querySelector('input[type="text"]').value.trim();
       const email = signupForm.querySelector('input[type="email"]').value.trim();
       const password = signupForm.querySelectorAll('input[type="password"]')[0].value.trim();
       const rePassword = signupForm.querySelectorAll('input[type="password"]')[1].value.trim();
 
+      // Validation
       if (!email || !password || !username || !rePassword) {
-        alert("Please fill out all fields.");
+        showMessage("Please fill out all fields.", true);
+        setLoading(signupBtn, false);
         return;
       }
 
       if (password !== rePassword) {
-        alert("Passwords do not match.");
+        showMessage("Passwords do not match.", true);
+        setLoading(signupBtn, false);
         return;
       }
 
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
+      if (password.length < 6) {
+        showMessage("Password must be at least 6 characters long.", true);
+        setLoading(signupBtn, false);
+        return;
+      }
 
-      if (users.some(user => user.email === email)) {
-        alert("Email already exists.");
-      } else {
-        users.push({ username, email, password });
-        localStorage.setItem('users', JSON.stringify(users));
-        alert("Account created successfully!");
-        loginTab.click();
+      try {
+        // Sign up user with Supabase Auth
+        const { data, error } = await supabase.auth.signUp({
+          email: email,
+          password: password,
+          options: {
+            data: {
+              username: username
+            }
+          }
+        });
+
+        if (error) {
+          throw error;
+        }
+
+       if (data.user && !data.user.email_confirmed_at) {
+  showMessage("Please check your email to confirm your account before logging in.");
+} else {
+  showMessage("Account created successfully! You can now log in.");
+}
+
+// Clear form inputs manually
+const signupInputs = signupForm.querySelectorAll('input');
+signupInputs.forEach(input => input.value = '');
+
+        
+        // Switch to login tab after a brief delay
+        setTimeout(() => {
+          loginTab.click();
+        }, 2000);
+
+      } catch (error) {
+        console.error('Signup error:', error);
+        showMessage(error.message || "An error occurred during signup. Please try again.", true);
+      } finally {
+        setLoading(signupBtn, false);
       }
     });
 
     // Login logic
-    loginForm.querySelector('button').addEventListener('click', () => {
+    loginBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      setLoading(loginBtn, true);
+
       const email = loginForm.querySelector('input[type="email"]').value.trim();
       const password = loginForm.querySelector('input[type="password"]').value.trim();
 
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
-      const user = users.find(user => user.email === email && user.password === password);
+      if (!email || !password) {
+        showMessage("Please fill out all fields.", true);
+        setLoading(loginBtn, false);
+        return;
+      }
 
-      if (user) {
-        alert("Login successful!");
-        window.location.href = "main.html";
-      } else {
-        alert("Incorrect email or password.");
+      try {
+        // Clear any existing session first
+        await supabase.auth.signOut();
+        
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email,
+          password: password
+        });
+
+        if (error) {
+          throw error;
+        }
+
+      if (data.user) {
+  showMessage("Login successful! Redirecting...");
+  userStatus.textContent = `Logged in as: ${data.user.email}`;
+  
+  // Clear input fields manually
+  const loginInputs = loginForm.querySelectorAll('input');
+  loginInputs.forEach(input => input.value = '');
+  
+  // Redirect to main app
+  setTimeout(() => {
+    window.location.href = 'main.html';
+  }, 1000);
+}
+
+      } catch (error) {
+        console.error('Login error:', error);
+        showMessage("Incorrect email or password.", true);
+        userStatus.textContent = `Login failed: ${error.message}`;
+      } finally {
+        setLoading(loginBtn, false);
       }
     });
+
+    // Handle Enter key press
+    document.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        if (!loginForm.classList.contains('hidden')) {
+          loginBtn.click();
+        } else if (!signupForm.classList.contains('hidden')) {
+          signupBtn.click();
+        }
+      }
+    });
+
+    // Listen for auth state changes
+    supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', event, session);
+      userStatus.textContent = `Auth event: ${event}`;
+      
+      if (event === 'SIGNED_OUT') {
+        userStatus.textContent = 'User signed out';
+      } else if (event === 'SIGNED_IN' && session) {
+        userStatus.textContent = `User signed in: ${session.user.email}`;
+      }
+    });
+
+    // Check user session when page loads - with delay to prevent race conditions
+    setTimeout(() => {
+      checkUser();
+    }, 500);
   </script>
 </body>
 </html>
